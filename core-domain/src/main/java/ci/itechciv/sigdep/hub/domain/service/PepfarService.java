@@ -67,7 +67,64 @@ public class PepfarService {
         return new PepfarReport(qr,
                 txNew(qr, regionId, districtId, siteId),
                 txCurr(qr, regionId, districtId, siteId),
-                txPvls(qr, regionId, districtId, siteId));
+                txPvls(qr, regionId, districtId, siteId),
+                hts(qr, regionId, districtId, siteId),
+                pmtct(qr, regionId, districtId, siteId),
+                tbPrev(qr, regionId, districtId, siteId),
+                txCurrByMsd(qr, regionId, districtId, siteId));
+    }
+
+    // ---------- TX_CURR by MSD (modèle de soin) ------------------------------
+
+    /**
+     * File active désagrégée par modèle de soins différenciés (MSD), tel
+     * que captée sur la dernière visite avant la fin du trimestre :
+     * Standard / IVSA / Échec thérapeutique / (non renseigné).
+     *
+     * Donne une vue stratégique du portefeuille de prise en charge : quel
+     * % de la cohorte est sur le modèle IVSA (patients non stables) vs
+     * stable (Standard) vs en échec.
+     */
+    private List<MsdBucket> txCurrByMsd(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        String region = geoJoinFor("p", regionId, districtId, siteId);
+
+        String sql =
+                "WITH last_visit AS ("
+                + "  SELECT DISTINCT ON (v.patient_id)"
+                + "         v.patient_id, v.ivsa_msd_code"
+                + "  FROM core.visits v"
+                + "  WHERE v.voided = FALSE AND v.visit_date <= ?"
+                + "  ORDER BY v.patient_id, v.visit_date DESC"
+                + ")"
+                + " SELECT COALESCE(lv.ivsa_msd_code, '(non renseigné)') AS msd,"
+                + "        count(*) AS n"
+                + " FROM core.patients p"
+                + " JOIN core.treatment_initiations ti ON ti.patient_id = p.id"
+                + "   AND ti.voided = FALSE"
+                + "   AND COALESCE(ti.arv_init_date, ti.enrollment_date) <= ?"
+                + " LEFT JOIN last_visit lv ON lv.patient_id = p.id"
+                + region
+                + " WHERE p.voided = FALSE"
+                + "   AND NOT EXISTS ("
+                + "     SELECT 1 FROM core.closures c"
+                + "     WHERE c.patient_id = p.id AND c.voided = FALSE"
+                + "       AND c.closure_date <= ?)"
+                + " GROUP BY msd"
+                + " ORDER BY n DESC";
+
+        List<Object> args = new ArrayList<>();
+        args.add(qr.end()); // last_visit watermark
+        args.add(qr.end()); // init <= end
+        Long g = geoArg(regionId, districtId, siteId);
+        if (g != null) args.add(g);
+        args.add(qr.end()); // closure <= end
+
+        // RowMapper rather than RowCallbackHandler to disambiguate the
+        // overloaded jdbc.query(sql, ..., args[]) — the lambda's empty
+        // return makes javac unable to pick between the two otherwise.
+        return jdbc.query(sql,
+                (rs, i) -> new MsdBucket(rs.getString("msd"), rs.getLong("n")),
+                args.toArray());
     }
 
     // ---------- TX_NEW --------------------------------------------------------
@@ -224,6 +281,160 @@ public class PepfarService {
         return new TxPvls(denom, numer, pct);
     }
 
+    // ---------- HTS_TST / HTS_POS --------------------------------------------
+
+    /**
+     * HTS = screenings registered during the quarter, disaggregated by
+     * sex and age band. The screenings stream is anonymous (no
+     * patient_id), so age comes from the record's own {@code age}
+     * column captured at testing time.
+     *
+     * - HTS_TST : tested in the quarter (count of voided=false rows
+     *             with screening_date in [start, end])
+     * - HTS_POS : subset with final_result = 'POS'
+     */
+    private Hts hts(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        String region = anonGeoJoin("sc", regionId, districtId, siteId);
+        String bandExpr = ageBandExpr("sc.age");
+
+        String sql = "SELECT sc.gender AS sex, " + bandExpr + " AS band,"
+                + "        count(*) AS tst,"
+                + "        count(*) FILTER (WHERE sc.final_result = 'POS') AS pos"
+                + " FROM core.screenings sc" + region
+                + " WHERE sc.voided = FALSE"
+                + "   AND sc.screening_date BETWEEN ? AND ?"
+                + " GROUP BY sc.gender, " + bandExpr;
+
+        List<DisaggCell> tstCells = new ArrayList<>();
+        List<DisaggCell> posCells = new ArrayList<>();
+        jdbc.query(sql, rs -> {
+            String sex = normalizeSex(rs.getString("sex"));
+            String band = rs.getString("band");
+            tstCells.add(new DisaggCell(sex, band, rs.getLong("tst")));
+            posCells.add(new DisaggCell(sex, band, rs.getLong("pos")));
+        }, buildArgs(regionId, districtId, siteId, qr.start(), qr.end()));
+
+        Disaggregated tst = new Disaggregated(sumCells(tstCells), tstCells);
+        Disaggregated pos = new Disaggregated(sumCells(posCells), posCells);
+        BigDecimal pct = tst.total() == 0 ? null
+                : new BigDecimal(pos.total()).multiply(new BigDecimal(100))
+                        .divide(new BigDecimal(tst.total()), 1, RoundingMode.HALF_UP);
+        return new Hts(tst, pos, pct);
+    }
+
+    // ---------- PMTCT (STAT / ART / EID) -------------------------------------
+
+    /**
+     * PMTCT — three indicators bundled together because the data lives
+     * on the same upstream forms. All are anonymous (no patient join).
+     *
+     * - PMTCT_STAT (numer) : pregnant women whose HIV status is known
+     *   at entry to ANC during the quarter. We use any spousal screening
+     *   result + arv status at registering as a proxy for "status known".
+     *   denom = total women started in the quarter, numer = subset with
+     *   a known status (status_at_registering OR test_result present).
+     * - PMTCT_ART : pregnant women living with HIV who received ARV.
+     *   denom = women started in Q with arv_status_at_registering not
+     *   null (i.e. HIV-confirmed), numer = subset where the status
+     *   indicates ARV (label contains 'ARV' or 'sous').
+     * - PMTCT_EID : HIV-exposed infants with a PCR1 sample collected
+     *   within 2 months of birth. denom = exposed infants born in Q,
+     *   numer = subset with pcr1_sampling_date within 60 days of birth.
+     */
+    private Pmtct pmtct(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        Pair stat = pmtctStat(qr, regionId, districtId, siteId);
+        Pair art  = pmtctArt(qr, regionId, districtId, siteId);
+        Pair eid  = pmtctEid(qr, regionId, districtId, siteId);
+        return new Pmtct(stat, art, eid);
+    }
+
+    private Pair pmtctStat(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        String region = anonGeoJoin("m", regionId, districtId, siteId);
+        String bandExpr = ageBandExpr("m.age");
+
+        // "Status known" = the form captured either an ARV status at
+        // registering (already HIV-confirmed) or a spousal screening
+        // result was recorded (test offered). We collapse these into one
+        // disaggregated count where denom = all, numer = status-known.
+        String sql = "SELECT 'F' AS sex, " + bandExpr + " AS band,"
+                + "        count(*) AS denom,"
+                + "        count(*) FILTER (WHERE m.arv_status_at_registering IS NOT NULL"
+                + "                          OR m.spousal_screening_result IS NOT NULL) AS numer"
+                + " FROM core.ptme_mothers m" + region
+                + " WHERE m.voided = FALSE"
+                + "   AND m.start_date BETWEEN ? AND ?"
+                + " GROUP BY band";
+        return runDenomNumer(sql, buildArgs(regionId, districtId, siteId, qr.start(), qr.end()));
+    }
+
+    private Pair pmtctArt(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        String region = anonGeoJoin("m", regionId, districtId, siteId);
+        String bandExpr = ageBandExpr("m.age");
+
+        // denom = HIV-confirmed pregnant women in Q ; numer = subset
+        // already on ARV at entry or newly initiated (label heuristic).
+        String sql = "SELECT 'F' AS sex, " + bandExpr + " AS band,"
+                + "        count(*) AS denom,"
+                + "        count(*) FILTER (WHERE m.arv_status_at_registering ILIKE '%ARV%'"
+                + "                          OR m.arv_status_at_registering ILIKE '%diagnostiqu%') AS numer"
+                + " FROM core.ptme_mothers m" + region
+                + " WHERE m.voided = FALSE"
+                + "   AND m.start_date BETWEEN ? AND ?"
+                + "   AND m.arv_status_at_registering IS NOT NULL"
+                + " GROUP BY band";
+        return runDenomNumer(sql, buildArgs(regionId, districtId, siteId, qr.start(), qr.end()));
+    }
+
+    private Pair pmtctEid(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        String region = anonGeoJoin("c", regionId, districtId, siteId);
+
+        // Infants born in the quarter, grouped by sex. Age band is forced
+        // to '<15' since every infant lands there anyway — keeps the
+        // disaggregation table layout consistent with the rest of the
+        // cascade. Numerator = subset with a PCR1 sample collected
+        // within 60 days of birth (early infant diagnosis).
+        String sql = "SELECT c.gender AS sex,"
+                + "        '<15' AS band,"
+                + "        count(*) AS denom,"
+                + "        count(*) FILTER (WHERE c.pcr1_sampling_date IS NOT NULL"
+                + "                          AND c.pcr1_sampling_date - c.birth_date <= 60) AS numer"
+                + " FROM core.ptme_children c" + region
+                + " WHERE c.voided = FALSE"
+                + "   AND c.birth_date BETWEEN ? AND ?"
+                + " GROUP BY c.gender";
+        return runDenomNumer(sql, buildArgs(regionId, districtId, siteId, qr.start(), qr.end()));
+    }
+
+    // ---------- TB_PREV ------------------------------------------------------
+
+    /**
+     * TB_PREV — patients who completed TB Preventive Treatment during
+     * the quarter. We treat a TPT record as "completed" when its
+     * tpt_outcome is non-null (the source emits an outcome only on
+     * the closing TPT encounter).
+     *
+     * - denom : patients with a TPT record whose end_date falls in Q
+     * - numer : subset with a non-null outcome (= completion observed)
+     *
+     * Age is taken from core.patients at the patient join, since
+     * tpt_records carry patient_id (unlike screenings/PTME).
+     */
+    private Pair tbPrev(QuarterRange qr, Long regionId, Long districtId, Long siteId) {
+        String region = geoJoinFor("p", regionId, districtId, siteId);
+        String ageExpr = "DATE_PART('year', AGE(DATE '" + qr.end() + "', p.birth_date))";
+        String bandExpr = ageBandExpr(ageExpr);
+
+        String sql = "SELECT p.sex AS sex, " + bandExpr + " AS band,"
+                + "        count(*) AS denom,"
+                + "        count(*) FILTER (WHERE t.tpt_outcome IS NOT NULL) AS numer"
+                + " FROM core.tpt_records t"
+                + " JOIN core.patients p ON p.id = t.patient_id" + region
+                + " WHERE t.voided = FALSE AND p.voided = FALSE"
+                + "   AND t.tpt_end_date BETWEEN ? AND ?"
+                + " GROUP BY p.sex, " + bandExpr;
+        return runDenomNumer(sql, buildArgs(regionId, districtId, siteId, qr.start(), qr.end()));
+    }
+
     // ---------- helpers -------------------------------------------------------
 
     private Disaggregated aggregate(String sql, Object[] args) {
@@ -276,6 +487,49 @@ public class PepfarService {
         return "";
     }
 
+    /**
+     * Geo join for anonymous streams (screenings, ptme_*) where site_id
+     * sits directly on the alias table. Same semantics as
+     * {@link #geoJoinFor(String, Long, Long, Long)} but kept explicit
+     * for readability where the TX_* indicators join through
+     * core.patients first.
+     */
+    private static String anonGeoJoin(String alias, Long regionId, Long districtId, Long siteId) {
+        return geoJoinFor(alias, regionId, districtId, siteId);
+    }
+
+    /**
+     * Run a denom/numer SQL where each row carries (sex, band, denom,
+     * numer). Used by HTS_POS, PMTCT_* and TB_PREV.
+     */
+    private Pair runDenomNumer(String sql, Object[] args) {
+        List<DisaggCell> denomCells = new ArrayList<>();
+        List<DisaggCell> numerCells = new ArrayList<>();
+        jdbc.query(sql, rs -> {
+            String sex = normalizeSex(rs.getString("sex"));
+            String band = rs.getString("band");
+            denomCells.add(new DisaggCell(sex, band, rs.getLong("denom")));
+            numerCells.add(new DisaggCell(sex, band, rs.getLong("numer")));
+        }, args);
+        Disaggregated denom = new Disaggregated(sumCells(denomCells), denomCells);
+        Disaggregated numer = new Disaggregated(sumCells(numerCells), numerCells);
+        BigDecimal pct = denom.total() == 0 ? null
+                : new BigDecimal(numer.total()).multiply(new BigDecimal(100))
+                        .divide(new BigDecimal(denom.total()), 1, RoundingMode.HALF_UP);
+        return new Pair(denom, numer, pct);
+    }
+
+    /** Normalises upstream sex codes to the {M, F, unknown} alphabet
+     *  the front-end matrix expects. */
+    private static String normalizeSex(String raw) {
+        if (raw == null) return "unknown";
+        return switch (raw.trim().toUpperCase()) {
+            case "M", "MALE",   "MASCULIN"  -> "M";
+            case "F", "FEMALE", "FEMININ", "FÉMININ" -> "F";
+            default -> "unknown";
+        };
+    }
+
     private static Long geoArg(Long regionId, Long districtId, Long siteId) {
         if (siteId != null)     return siteId;
         if (districtId != null) return districtId;
@@ -320,10 +574,30 @@ public class PepfarService {
 
     public record TxPvls(Disaggregated denominator, Disaggregated numerator, BigDecimal pct) {}
 
+    /**
+     * Generic denom/numer pair with the computed pct, reused by every
+     * indicator that has a "X out of Y" shape: HTS_POS (over HTS_TST),
+     * PMTCT_STAT, PMTCT_ART, PMTCT_EID, TB_PREV.
+     */
+    public record Pair(Disaggregated denominator, Disaggregated numerator, BigDecimal pct) {}
+
+    /** HTS bundle — TST is the universe, POS is the subset. */
+    public record Hts(Disaggregated tst, Disaggregated pos, BigDecimal positivityPct) {}
+
+    /** PMTCT bundle — STAT (status known), ART (under ARV), EID (PCR1 <= 2 mo). */
+    public record Pmtct(Pair stat, Pair art, Pair eid) {}
+
+    /** File active désagrégée par modèle de soins différenciés (MSD). */
+    public record MsdBucket(String msd, long count) {}
+
     public record PepfarReport(
             QuarterRange period,
             Disaggregated txNew,
             Disaggregated txCurr,
-            TxPvls txPvls
+            TxPvls txPvls,
+            Hts hts,
+            Pmtct pmtct,
+            Pair tbPrev,
+            List<MsdBucket> txCurrByMsd
     ) {}
 }

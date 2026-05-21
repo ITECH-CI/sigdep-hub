@@ -43,6 +43,8 @@ services:
     depends_on: [postgres]
     volumes:
       - ./keycloak/realm-sigdep.json:/opt/keycloak/data/import/realm-sigdep.json:ro
+      # SIGDEP custom login theme.
+      - ./keycloak/themes/sigdep:/opt/keycloak/themes/sigdep:ro
 
   console-api:
     # Replace with the actual published image (e.g. ghcr.io/itechciv/sigdep-console-api:<tag>).
@@ -68,19 +70,26 @@ services:
       KEYCLOAK_ISSUER_URI:        ${KC_HOSTNAME:-https://sigdep.example.org}/realms/sigdep
     depends_on: [postgres]
 
+  console-web:
+    # Sert le bundle Vite + sa propre config nginx (history fallback,
+    # cache /assets/). Le nginx front (ci-dessous) fait le reverse-proxy.
+    image: ${CONSOLE_WEB_IMAGE:-sigdep-console-web:latest}
+    container_name: sigdep-console-web
+    # Pas de port host exposé : le nginx front est seul à sortir sur
+    # 443. console-web ne répond qu'au réseau interne du compose.
+
   nginx:
     image: nginx:1.27-alpine
     container_name: sigdep-nginx
-    depends_on: [keycloak, console-api, ingestion-api]
+    depends_on: [keycloak, console-api, ingestion-api, console-web]
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
-      # Mount a real cert here. For staging you can drop in a mkcert pair.
+      # Monter ici un vrai certificat TLS. Pour staging, un certificat
+      # mkcert fait l'affaire.
       - ./nginx/certs:/etc/nginx/certs:ro
-      # The bundled SPA assets go here (mount the result of `npm run build`).
-      - ./web:/usr/share/nginx/html:ro
 
 volumes:
   postgres_data:

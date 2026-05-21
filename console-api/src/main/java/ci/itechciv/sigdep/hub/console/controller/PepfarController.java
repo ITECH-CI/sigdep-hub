@@ -84,7 +84,45 @@ public class PepfarController {
                 w.print("TX_PVLS_pct;Total;Total;");
                 w.println(r.txPvls().pct().toPlainString());
             }
+
+            // HTS
+            writeRows(w, "HTS_TST", r.hts().tst().cells());
+            writeTotal(w, "HTS_TST", r.hts().tst().total());
+            writeRows(w, "HTS_POS", r.hts().pos().cells());
+            writeTotal(w, "HTS_POS", r.hts().pos().total());
+            if (r.hts().positivityPct() != null) {
+                w.print("HTS_POS_pct;Total;Total;");
+                w.println(r.hts().positivityPct().toPlainString());
+            }
+
+            // PMTCT
+            writePair(w, "PMTCT_STAT", r.pmtct().stat());
+            writePair(w, "PMTCT_ART",  r.pmtct().art());
+            writePair(w, "PMTCT_EID",  r.pmtct().eid());
+
+            // TB_PREV
+            writePair(w, "TB_PREV", r.tbPrev());
+
             w.println("# Période;" + period);
+        }
+    }
+
+    /**
+     * Write the denom/numer/pct triplet for an indicator shaped as
+     * {@link ci.itechciv.sigdep.hub.domain.service.PepfarService.Pair}.
+     * Uses suffixes _D (denominator), _N (numerator), _pct.
+     */
+    private static void writePair(PrintWriter w,
+                                  String indicator,
+                                  ci.itechciv.sigdep.hub.domain.service.PepfarService.Pair p) {
+        writeRows(w, indicator + "_D", p.denominator().cells());
+        writeTotal(w, indicator + "_D", p.denominator().total());
+        writeRows(w, indicator + "_N", p.numerator().cells());
+        writeTotal(w, indicator + "_N", p.numerator().total());
+        if (p.pct() != null) {
+            w.print(indicator);
+            w.print("_pct;Total;Total;");
+            w.println(p.pct().toPlainString());
         }
     }
 

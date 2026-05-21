@@ -13,6 +13,13 @@ spring:
         default_schema: core
   liquibase:
     enabled: false
+  cache:
+    type: caffeine
+    # Tight TTL so dashboard / public-KPI consumers see fresh data within
+    # ~30s of an ingest, without paying the full SQL cost on every reload.
+    # Per-cache override is possible via `caffeine.spec` on a specific cache.
+    caffeine:
+      spec: maximumSize=2000,expireAfterWrite=60s
   security:
     oauth2:
       resourceserver:

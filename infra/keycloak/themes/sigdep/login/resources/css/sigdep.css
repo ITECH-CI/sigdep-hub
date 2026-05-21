@@ -1,0 +1,228 @@
+/* =============================================================================
+ * SIGDEP login theme — overrides on top of keycloak.v2.
+ * Palette imported from the console-web Tailwind config so the login page
+ * and the dashboard share the same identity.
+ * ===========================================================================*/
+
+:root {
+  --sigdep-50:  #e7f5f3;
+  --sigdep-100: #c4e6e1;
+  --sigdep-200: #9ed6cd;
+  --sigdep-300: #76c5b8;
+  --sigdep-500: #009d8e;
+  --sigdep-600: #008a7c;
+  --sigdep-700: #007568;
+  --sigdep-800: #005f54;
+  --sigdep-900: #003e36;
+  --ink:        #1f2937;
+  --ink-muted:  #6b7280;
+  --ink-subtle: #9ca3af;
+  --border:     #e5e7eb;
+  --bg:         #f8fafc;
+}
+
+/* ---- Page shell -----------------------------------------------------------*/
+
+body,
+.login-pf body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Two-column layout : hero on the left, login card on the right. On narrow
+   screens (< 900px) we stack and hide the hero. */
+.login-pf-page {
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.login-pf-page .login-pf-page-header {
+  display: none; /* we render our own header inside the right column */
+}
+
+/* The card itself */
+.card-pf {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  padding: 2rem 2.25rem;
+  background: white;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+/* ---- Custom hero (rendered by login.ftl) ---------------------------------*/
+
+.sigdep-shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+}
+
+.sigdep-hero {
+  background: linear-gradient(135deg, var(--sigdep-700) 0%, var(--sigdep-900) 100%);
+  color: white;
+  padding: 3rem 3rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sigdep-hero__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+.sigdep-hero__brand img {
+  height: 64px;
+  width: auto;
+  background: white;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.sigdep-hero__body h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  margin: 0 0 1rem 0;
+  font-weight: 700;
+}
+
+.sigdep-hero__body p {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--sigdep-100);
+  max-width: 36ch;
+}
+
+.sigdep-hero__footer {
+  font-size: 0.8rem;
+  color: var(--sigdep-100);
+  opacity: 0.85;
+}
+
+.sigdep-hero__footer a {
+  color: white;
+  text-decoration: underline;
+}
+
+.sigdep-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+}
+
+@media (max-width: 900px) {
+  .sigdep-shell { grid-template-columns: 1fr; }
+  .sigdep-hero  { display: none; }
+}
+
+/* ---- Form elements --------------------------------------------------------*/
+
+.pf-c-form__label,
+.pf-c-form-control--label,
+label.control-label {
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.pf-c-form-control,
+input.form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  background: white;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+
+.pf-c-form-control:focus,
+input.form-control:focus,
+input:focus {
+  border-color: var(--sigdep-500);
+  box-shadow: 0 0 0 3px rgba(0, 157, 142, 0.18);
+  outline: none;
+}
+
+/* ---- Buttons --------------------------------------------------------------*/
+
+.pf-c-button.pf-m-primary,
+input[type="submit"].btn-primary,
+.btn-primary {
+  background: var(--sigdep-500);
+  border: 1px solid var(--sigdep-500);
+  color: white;
+  border-radius: 8px;
+  padding: 0.65rem 1.2rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background 120ms;
+}
+
+.pf-c-button.pf-m-primary:hover,
+input[type="submit"].btn-primary:hover,
+.btn-primary:hover {
+  background: var(--sigdep-700);
+  border-color: var(--sigdep-700);
+}
+
+.pf-c-button.pf-m-link,
+a.btn-link {
+  color: var(--sigdep-700);
+  font-weight: 500;
+}
+
+.pf-c-button.pf-m-link:hover,
+a.btn-link:hover {
+  color: var(--sigdep-900);
+  text-decoration: underline;
+}
+
+/* ---- Alerts / errors ------------------------------------------------------*/
+
+.alert-error,
+.pf-c-alert.pf-m-danger {
+  border-left: 4px solid #dc2626;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.alert-warning,
+.pf-c-alert.pf-m-warning {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.alert-success,
+.pf-c-alert.pf-m-success {
+  border-left: 4px solid var(--sigdep-500);
+  background: var(--sigdep-50);
+  color: var(--sigdep-900);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+/* ---- Misc -----------------------------------------------------------------*/
+
+#kc-header,
+#kc-header-wrapper,
+.login-pf-page-header {
+  display: none;
+}
+
+/* Hide the default Keycloak footer link – we render our own in the hero */
+#kc-info-wrapper { display: none; }

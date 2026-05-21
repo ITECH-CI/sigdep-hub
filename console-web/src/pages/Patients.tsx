@@ -7,6 +7,7 @@ import { formatInt } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
+import { TableSkeleton } from '../components/Skeleton';
 
 function age(birthDate: string | null): string {
   if (!birthDate) return '—';
@@ -95,10 +96,11 @@ export function Patients() {
                 <SortableTh k="site"        sort={sort} onSort={onSort}>Site</SortableTh>
               </tr>
             </thead>
+            {isLoading ? (
+              <TableSkeleton rows={8} cols={9} />
+            ) : (
             <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-muted">Chargement…</td></tr>
-              ) : isError ? (
+              {isError ? (
                 <tr><td colSpan={9} className="px-4 py-6 text-center text-rose-600">Erreur de chargement</td></tr>
               ) : data?.content.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-muted">Aucun patient</td></tr>
@@ -120,6 +122,7 @@ export function Patients() {
                 </tr>
               ))}
             </tbody>
+            )}
           </table>
         </div>
       </div>

@@ -230,15 +230,17 @@ public class InitiationWriter {
     }
 
     /**
-     * Propagate the four profile fields (marital_status, birth_place,
-     * education_level, religion) from the enrolment form to core.patients.
-     * Only updates columns where the form provided a non-null value, so we
-     * never overwrite an existing value with a missing one. updated_at gets
-     * bumped only if at least one column actually changes.
+     * Propagate the five profile fields (marital_status, birth_place,
+     * education_level, religion, profession) from the enrolment form to
+     * core.patients. Only updates columns where the form provided a
+     * non-null value, so we never overwrite an existing value with a
+     * missing one. updated_at gets bumped only if at least one column
+     * actually changes.
      */
     private void propagateProfile(long patientId, TreatmentInitiationDto t) {
         if (t.maritalStatus() == null && t.birthPlace() == null
-                && t.educationLevel() == null && t.religion() == null) {
+                && t.educationLevel() == null && t.religion() == null
+                && t.profession() == null) {
             return;
         }
         jdbc.update(
@@ -248,10 +250,12 @@ public class InitiationWriter {
                   birth_place     = COALESCE(?, birth_place),
                   education_level = COALESCE(?, education_level),
                   religion        = COALESCE(?, religion),
+                  profession      = COALESCE(?, profession),
                   updated_at      = NOW()
                 WHERE id = ?
                 """,
-                t.maritalStatus(), t.birthPlace(), t.educationLevel(), t.religion(),
+                t.maritalStatus(), t.birthPlace(), t.educationLevel(),
+                t.religion(), t.profession(),
                 patientId);
     }
 

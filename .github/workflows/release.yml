@@ -1,0 +1,229 @@
+name: release
+
+# Triggers on v*.*.* tags. Builds the three hub artefacts (ingestion-api
+# fat jar, console-api fat jar, console-web static bundle), then builds
+# and pushes three Docker images to GHCR.
+#
+# Image target is read from the repository variable IMAGE_REGISTRY
+# (Repository → Settings → Variables → Actions). Defaults to
+# ghcr.io/<owner> so a fork pushes to its own namespace. Set
+# IMAGE_REGISTRY=ghcr.io/itech-ci in the upstream repo to flip to the
+# official location.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v1.0.0)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # required to create the GitHub Release and upload assets
+      packages: write   # required to push to GHCR
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          ref="${{ github.event.inputs.tag || github.ref_name }}"
+          ref="${ref#refs/tags/}"
+          echo "tag=$ref" >> $GITHUB_OUTPUT
+          echo "version=${ref#v}" >> $GITHUB_OUTPUT
+
+      # Compute the image registry now (rather than as a static env)
+      # because docker requires lowercase repository names and
+      # github.repository_owner can be mixed-case ("Pkom17").
+      - name: Resolve image registry
+        id: registry
+        run: |
+          override="${{ vars.IMAGE_REGISTRY }}"
+          if [[ -n "$override" ]]; then
+            registry="$override"
+          else
+            owner="${{ github.repository_owner }}"
+            registry="ghcr.io/${owner,,}"
+          fi
+          echo "registry=$registry" >> $GITHUB_OUTPUT
+
+      - name: Checkout sigdep-hub
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      # actions/checkout refuses paths outside the workspace ; put the
+      # sibling inside the workspace and reference it from there.
+      - name: Checkout sigdep-contracts (matching tag)
+        id: ck-contracts-tag
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/sigdep-contracts
+          ref: ${{ steps.tag.outputs.tag }}
+          path: .sigdep-contracts
+        continue-on-error: true
+
+      - name: Fallback to contracts master if tag missing
+        if: steps.ck-contracts-tag.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/sigdep-contracts
+          ref: master
+          path: .sigdep-contracts
+
+      # ---------- Java build ----------------------------------------------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Install sigdep-contracts to local M2
+        working-directory: .sigdep-contracts
+        run: mvn -B -DskipTests install
+
+      - name: Build hub fat jars
+        run: mvn -B -DskipTests package
+
+      # ---------- SPA build (Vite) ----------------------------------------
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: console-web/package-lock.json
+
+      - name: Install console-web deps
+        working-directory: console-web
+        run: npm ci
+
+      # NB : the Vite build runs INSIDE the console-web Dockerfile too.
+      # We don't pre-build it here ; we let docker/build-push-action do
+      # the multi-stage build so the source layer caching matches.
+
+      # ---------- Docker images -------------------------------------------
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ingestion-api
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ingestion-api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.registry.outputs.registry }}/sigdep-ingestion-api:${{ steps.tag.outputs.version }}
+            ${{ steps.registry.outputs.registry }}/sigdep-ingestion-api:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.version }}
+            org.opencontainers.image.title=SIGDEP-3 ingestion API
+            org.opencontainers.image.licenses=Proprietary
+
+      - name: Build and push console-api
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: console-api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.registry.outputs.registry }}/sigdep-console-api:${{ steps.tag.outputs.version }}
+            ${{ steps.registry.outputs.registry }}/sigdep-console-api:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.version }}
+            org.opencontainers.image.title=SIGDEP-3 console API
+            org.opencontainers.image.licenses=Proprietary
+
+      - name: Build and push console-web
+        uses: docker/build-push-action@v5
+        with:
+          context: console-web
+          file: console-web/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.registry.outputs.registry }}/sigdep-console-web:${{ steps.tag.outputs.version }}
+            ${{ steps.registry.outputs.registry }}/sigdep-console-web:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.version }}
+            org.opencontainers.image.title=SIGDEP-3 console web
+            org.opencontainers.image.licenses=Proprietary
+
+      # -----------------------------------------------------------------
+      # Deploy bundle — tarball with everything a site admin needs to
+      # bring up the hub on a fresh server: docker-compose.prod.yml,
+      # nginx.prod.conf, Keycloak realm + theme, .env.example. The
+      # tarball is attached to the GitHub Release of this tag.
+      # -----------------------------------------------------------------
+      - name: Stage deploy bundle
+        run: |
+          PKG=sigdep-hub-deploy-${{ steps.tag.outputs.version }}
+          mkdir -p "deploy-build/$PKG"
+
+          # Compose + nginx + Keycloak realm/theme + env example
+          cp infra/docker-compose.prod.yml "deploy-build/$PKG/docker-compose.yml"
+          cp -r infra/nginx                "deploy-build/$PKG/nginx"
+          cp -r infra/keycloak             "deploy-build/$PKG/keycloak"
+          cp infra/.env.example            "deploy-build/$PKG/.env.example"
+
+          # Pin the image tags of this release inside the bundled .env.example
+          # so a site admin only has to fill in secrets, not version numbers.
+          sed -i \
+            -e "s|^CONSOLE_API_IMAGE=.*|CONSOLE_API_IMAGE=${{ steps.registry.outputs.registry }}/sigdep-console-api:${{ steps.tag.outputs.version }}|" \
+            -e "s|^INGESTION_API_IMAGE=.*|INGESTION_API_IMAGE=${{ steps.registry.outputs.registry }}/sigdep-ingestion-api:${{ steps.tag.outputs.version }}|" \
+            -e "s|^CONSOLE_WEB_IMAGE=.*|CONSOLE_WEB_IMAGE=${{ steps.registry.outputs.registry }}/sigdep-console-web:${{ steps.tag.outputs.version }}|" \
+            "deploy-build/$PKG/.env.example"
+
+          # Short README pointing at the official installation guide.
+          cp infra/deploy-bundle-README.md "deploy-build/$PKG/README.md"
+
+      - name: Create deploy tarball
+        run: |
+          PKG=sigdep-hub-deploy-${{ steps.tag.outputs.version }}
+          tar -C deploy-build -czf "${PKG}.tar.gz" "$PKG"
+          ls -lh "${PKG}.tar.gz"
+
+      - name: Create or update GitHub Release with deploy tarball
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ steps.tag.outputs.tag }}
+          TAR=sigdep-hub-deploy-${{ steps.tag.outputs.version }}.tar.gz
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Release $TAG. See CHANGELOG.md for details." \
+              --verify-tag
+          fi
+
+          gh release upload "$TAG" "$TAR" --clobber
+
+      - name: Summary
+        run: |
+          echo "### Images publiées sur GHCR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for image in sigdep-ingestion-api sigdep-console-api sigdep-console-web ; do
+            echo "- \`${{ steps.registry.outputs.registry }}/$image:${{ steps.tag.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${{ steps.registry.outputs.registry }}/$image:latest\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Bundle de déploiement" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- \`sigdep-hub-deploy-${{ steps.tag.outputs.version }}.tar.gz\` attaché à la release [${{ steps.tag.outputs.tag }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }})" >> $GITHUB_STEP_SUMMARY

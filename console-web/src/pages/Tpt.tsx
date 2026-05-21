@@ -12,6 +12,7 @@ import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
+import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from '../components/Skeleton';
 
 const PERIODS = [
   { months: 12, label: '12 derniers mois' },
@@ -81,24 +82,26 @@ export function Tpt() {
         </>} />
 
       {/* KPIs */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
-        <Kpi label="TPT (cumul)"
-             value={summary.isError ? 'Erreur' : formatInt(summary.data?.totalAllTime)}
-             hint="Toutes périodes confondues"
-             hintTone="neutral" />
-        <Kpi label="TPT démarrés"
-             value={summary.isError ? 'Erreur' : formatInt(summary.data?.startedInPeriod)}
-             hint={`${PERIODS.find(p => p.months === months)?.label}`}
-             hintTone="neutral" />
-        <Kpi label="TPT terminés"
-             value={summary.isError ? 'Erreur' : formatInt(summary.data?.completedInPeriod)}
-             hint="Avec outcome documenté"
-             hintTone="positive" />
-        <Kpi label="Taux de complétion"
-             value={summary.isError ? 'Erreur' : formatPercent(summary.data?.completionPct ?? null)}
-             hint="Démarrés / terminés (période)"
-             hintTone="positive" />
-      </div>
+      {summary.isLoading ? <KpiRowSkeleton /> : (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
+          <Kpi label="TPT (cumul)"
+               value={summary.isError ? 'Erreur' : formatInt(summary.data?.totalAllTime)}
+               hint="Toutes périodes confondues"
+               hintTone="neutral" />
+          <Kpi label="TPT démarrés"
+               value={summary.isError ? 'Erreur' : formatInt(summary.data?.startedInPeriod)}
+               hint={`${PERIODS.find(p => p.months === months)?.label}`}
+               hintTone="neutral" />
+          <Kpi label="TPT terminés"
+               value={summary.isError ? 'Erreur' : formatInt(summary.data?.completedInPeriod)}
+               hint="Avec outcome documenté"
+               hintTone="positive" />
+          <Kpi label="Taux de complétion"
+               value={summary.isError ? 'Erreur' : formatPercent(summary.data?.completionPct ?? null)}
+               hint="Démarrés / terminés (période)"
+               hintTone="positive" />
+        </div>
+      )}
 
       {/* Yearly chart + outcome distribution */}
       <div className="grid gap-3 lg:grid-cols-2 mb-6">
@@ -106,7 +109,7 @@ export function Tpt() {
           <h3 className="text-sm font-medium mb-4">TPT démarrés par année</h3>
           <div className="flex-1 min-h-64">
             {summary.isLoading ? (
-              <div className="h-full flex items-center justify-center text-ink-muted text-sm">Chargement…</div>
+              <ChartSkeleton height="h-64" />
             ) : !summary.data || summary.data.yearly.length === 0 ? (
               <div className="h-full flex items-center justify-center text-ink-muted text-sm">—</div>
             ) : (
@@ -156,11 +159,11 @@ export function Tpt() {
               <SortableTh k="site"       sort={sort} onSort={onSort}>Site</SortableTh>
             </tr>
           </thead>
+          {records.isLoading ? (
+            <TableSkeleton rows={8} cols={9} />
+          ) : (
           <tbody className="divide-y divide-slate-100">
             {(() => {
-              if (records.isLoading) {
-                return <tr><td colSpan={9} className="px-4 py-6 text-center text-ink-muted">Chargement…</td></tr>;
-              }
               if (records.isError) {
                 return <tr><td colSpan={9} className="px-4 py-6 text-center text-rose-600">Erreur de chargement</td></tr>;
               }
@@ -189,6 +192,7 @@ export function Tpt() {
               ));
             })()}
           </tbody>
+          )}
         </table>
 
         {records.data && records.data.total > size && (

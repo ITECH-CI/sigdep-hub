@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      One row per record rejected by the ingestion-api. Complements
+      audit.sync_batch.error_sample (which keeps an aggregated 5-row sample
+      per batch) by storing every reject with its sourceUuid so an operator
+      can see exactly which OpenMRS record failed and why.
+
+      resolved_at = NULL means "still needs attention" — used by the
+      Synchronisation page's Rejets tab to surface open rejects. An admin
+      can mark a reject as resolved once the underlying source data has
+      been fixed (or the issue is acknowledged).
+    -->
+    <changeSet id="030-create-rejected-record" author="itechciv" failOnError="true">
+        <createTable tableName="rejected_record" schemaName="audit">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="batch_id" type="BIGINT"
+                    remarks="Audit batch this reject came from.">
+                <constraints foreignKeyName="fk_rejected_batch"
+                             references="audit.sync_batch(id)"/>
+            </column>
+            <column name="site_id" type="BIGINT"
+                    remarks="Resolved site id; null if site code did not match.">
+                <constraints foreignKeyName="fk_rejected_site"
+                             references="core.sites(id)"/>
+            </column>
+            <column name="entity_type" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_uuid" type="VARCHAR(64)"
+                    remarks="OpenMRS UUID of the rejected record.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error_code" type="VARCHAR(40)"
+                    remarks="UNKNOWN_PATIENT / UPSERT_FAILED / SITE_NOT_FOUND / ..."/>
+            <column name="error_message" type="TEXT"
+                    remarks="Full message — keep the database error or stack root."/>
+            <column name="rejected_at" type="TIMESTAMP WITH TIME ZONE"
+                    defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resolved_at" type="TIMESTAMP WITH TIME ZONE"
+                    remarks="Null = still open. Set when an admin acknowledges or fixes."/>
+            <column name="resolved_by" type="VARCHAR(64)"
+                    remarks="Keycloak preferred_username of the resolver."/>
+            <column name="resolution_note" type="VARCHAR(500)"
+                    remarks="Optional free-text comment when resolving."/>
+        </createTable>
+
+        <createIndex tableName="rejected_record" schemaName="audit"
+                     indexName="idx_rejected_open">
+            <column name="site_id"/>
+            <column name="entity_type"/>
+            <column name="rejected_at" descending="true"/>
+        </createIndex>
+        <createIndex tableName="rejected_record" schemaName="audit"
+                     indexName="idx_rejected_source_uuid">
+            <column name="source_uuid"/>
+        </createIndex>
+        <createIndex tableName="rejected_record" schemaName="audit"
+                     indexName="idx_rejected_rejected_at">
+            <column name="rejected_at" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="rejected_record" schemaName="audit"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -66,6 +66,7 @@ export function PatientDetail() {
           <Field label="Niveau d’éducation" value={p.educationLevel} />
           <Field label="Statut matrimonial" value={p.maritalStatus} />
           <Field label="Lieu de naissance" value={p.birthPlace} />
+          <Field label="Religion" value={p.religion} />
           <Field label="Identifiants" value={p.identifiers.join(', ') || null} />
         </dl>
       </div>

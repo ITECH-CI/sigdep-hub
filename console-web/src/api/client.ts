@@ -52,8 +52,20 @@ export type DashboardKpis = {
   syncAlerts: SyncAlerts;
 };
 
-export function fetchDashboardKpis() {
-  return get<DashboardKpis>('/api/v1/dashboard/kpis');
+export function fetchDashboardKpis(scope: GeoScopeQ = {}) {
+  const params = new URLSearchParams();
+  appendScope(params, scope);
+  const qs = params.toString();
+  return get<DashboardKpis>(`/api/v1/dashboard/kpis${qs ? '?' + qs : ''}`);
+}
+
+export type RegionBucket = { regionId: number; regionName: string; count: number };
+
+export function fetchFileActiveByRegion(scope: GeoScopeQ = {}) {
+  const params = new URLSearchParams();
+  appendScope(params, scope);
+  const qs = params.toString();
+  return get<RegionBucket[]>(`/api/v1/dashboard/file-active-by-region${qs ? '?' + qs : ''}`);
 }
 
 // --- Patients --------------------------------------------------------------
@@ -89,6 +101,7 @@ export type PatientDetail = {
   educationLevel: string | null;
   maritalStatus: string | null;
   birthPlace: string | null;
+  religion: string | null;
   siteCode: string;
   siteName: string;
   identifiers: string[];
@@ -368,17 +381,37 @@ export type TxPvls = {
   numerator: Disaggregated;
   pct: number | null;
 };
+export type Pair = {
+  denominator: Disaggregated;
+  numerator: Disaggregated;
+  pct: number | null;
+};
+export type Hts = {
+  tst: Disaggregated;
+  pos: Disaggregated;
+  positivityPct: number | null;
+};
+export type Pmtct = {
+  stat: Pair;
+  art: Pair;
+  eid: Pair;
+};
 export type QuarterRange = {
   fiscalYear: number;
   quarter: number;
   start: string;
   end: string;
 };
+export type MsdBucket = { msd: string; count: number };
 export type PepfarReport = {
   period: QuarterRange;
   txNew: Disaggregated;
   txCurr: Disaggregated;
   txPvls: TxPvls;
+  hts: Hts;
+  pmtct: Pmtct;
+  tbPrev: Pair;
+  txCurrByMsd: MsdBucket[];
 };
 
 export function fetchPepfarReport(fy: number, q: number, scope: GeoScopeQ) {
@@ -476,9 +509,235 @@ export async function downloadTptCsv(months: number, scope: GeoScopeQ): Promise<
   await downloadCsv(url, `tpt-${months}m.csv`);
 }
 
+// --- Dépistage (HIV screening) --------------------------------------------
+
+export type ScreeningSiteTypeStat = {
+  label: string;
+  screened: number;
+  positive: number;
+  negative: number;
+  positivityPct: number | null;
+};
+
+export type ScreeningSummary = {
+  totalAllTime: number;
+  screenedInPeriod: number;
+  positiveInPeriod: number;
+  negativeInPeriod: number;
+  positivityPct: number | null;
+  yearly: YearBucket[];
+  results: Bucket[];
+  populations: Bucket[];
+  reasons: Bucket[];
+  genders: Bucket[];
+  siteTypes: ScreeningSiteTypeStat[];
+  periodMonths: number;
+};
+
+export type ScreeningRecord = {
+  id: number;
+  screeningCode: string | null;
+  screeningDate: string | null;
+  resultAnnouncingDate: string | null;
+  gender: string | null;
+  age: number | null;
+  populationType: string | null;
+  screeningReason: string | null;
+  finalResult: string | null;
+  retesting: boolean | null;
+  screeningSiteType: string | null;
+  screeningPost: string | null;
+  siteCode: string;
+  siteName: string;
+};
+
+export type ScreeningRecordPage = {
+  content: ScreeningRecord[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export function fetchScreeningSummary(months: number, scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  return get<ScreeningSummary>(`/api/v1/screenings/summary?${params}`);
+}
+
+export function fetchScreeningRecords(opts: {
+  months: number;
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('months', String(opts.months));
+  appendScope(params, opts);
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<ScreeningRecordPage>(`/api/v1/screenings/records?${params}`);
+}
+
+export async function downloadScreeningCsv(months: number, scope: GeoScopeQ): Promise<void> {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  const url = `/api/v1/screenings/records.csv?${params}`;
+  await downloadCsv(url, `depistage-${months}m.csv`);
+}
+
+// --- PTME -----------------------------------------------------------------
+
+export type PtmeMotherSummary = {
+  totalAllTime: number;
+  inPeriod: number;
+  spousalScreened: number;
+  spousalPositive: number;
+  spousalCoveragePct: number | null;
+  yearly: YearBucket[];
+  outcomes: Bucket[];
+  arvAtRegistering: Bucket[];
+  periodMonths: number;
+};
+
+export type PtmeMotherRecord = {
+  id: number;
+  sourceUuid: string;
+  pregnantNumber: string | null;
+  hivCareNumber: string | null;
+  screeningNumber: string | null;
+  age: number | null;
+  maritalStatus: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  estimatedDeliveryDate: string | null;
+  arvStatusAtRegistering: string | null;
+  pregnancyOutcome: string | null;
+  spousalScreening: string | null;
+  spousalScreeningResult: string | null;
+  deliveryType: string | null;
+  siteCode: string;
+  siteName: string;
+};
+
+export type PtmeMotherPage = {
+  content: PtmeMotherRecord[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export type PtmeChildSummary = {
+  totalAllTime: number;
+  inPeriod: number;
+  anyPositive: number;
+  prophylaxisGiven: number;
+  positivityPct: number | null;
+  yearly: YearBucket[];
+  followupResults: Bucket[];
+  pcr1: Bucket[];
+  periodMonths: number;
+};
+
+export type PtmeChildRecord = {
+  id: number;
+  sourceUuid: string;
+  motherSourceUuid: string | null;
+  childFollowupNumber: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  arvProphylaxisGiven: string | null;
+  arvProphylaxisGivenDate: string | null;
+  pcr1Result: string | null;
+  pcr2Result: string | null;
+  pcr3Result: string | null;
+  hivSerology1Result: string | null;
+  hivSerology2Result: string | null;
+  followupResult: string | null;
+  followupResultDate: string | null;
+  siteCode: string;
+  siteName: string;
+};
+
+export type PtmeChildPage = {
+  content: PtmeChildRecord[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export function fetchPtmeMotherSummary(months: number, scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  return get<PtmeMotherSummary>(`/api/v1/ptme/mothers/summary?${params}`);
+}
+
+export function fetchPtmeMotherRecords(opts: {
+  months: number;
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('months', String(opts.months));
+  appendScope(params, opts);
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<PtmeMotherPage>(`/api/v1/ptme/mothers/records?${params}`);
+}
+
+export async function downloadPtmeMotherCsv(months: number, scope: GeoScopeQ): Promise<void> {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  await downloadCsv(`/api/v1/ptme/mothers/records.csv?${params}`, `ptme-meres-${months}m.csv`);
+}
+
+export function fetchPtmeChildSummary(months: number, scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  return get<PtmeChildSummary>(`/api/v1/ptme/children/summary?${params}`);
+}
+
+export function fetchPtmeChildRecords(opts: {
+  months: number;
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('months', String(opts.months));
+  appendScope(params, opts);
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<PtmeChildPage>(`/api/v1/ptme/children/records?${params}`);
+}
+
+export async function downloadPtmeChildCsv(months: number, scope: GeoScopeQ): Promise<void> {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  await downloadCsv(`/api/v1/ptme/children/records.csv?${params}`, `ptme-enfants-${months}m.csv`);
+}
+
 // --- Clinic (suivi clinique) -----------------------------------------------
 
-export type MonthlyCount = { month: string; count: number };
+export type MonthlyCount = { month: string; count: number; dispensations: number; expected: number };
 
 export type ClinicSummary = {
   visitsAllTime: number;
@@ -555,6 +814,218 @@ export async function downloadClinicCsv(months: number, scope: GeoScopeQ): Promi
   appendScope(params, scope);
   const url = `/api/v1/clinic/visits.csv?${params}`;
   await downloadCsv(url, `clinique-${months}m.csv`);
+}
+
+// --- Initiations (fiche initiale) -----------------------------------------
+
+export type InitiationSummary = {
+  totalAllTime: number;
+  inPeriod: number;
+  pediatric: number;
+  referred: number;
+  pediatricPct: number | null;
+  yearly: YearBucket[];
+  entryPoints: Bucket[];
+  regimens: Bucket[];
+  whoStages: Bucket[];
+  periodMonths: number;
+};
+
+export type InitiationRecord = {
+  id: number;
+  patientId: number;
+  patientCode: string | null;
+  arvInitDate: string | null;
+  enrollmentDate: string | null;
+  entryPoint: string | null;
+  hivType: string | null;
+  arvRegimenInitial: string | null;
+  whoStageInitial: string | null;
+  cdcStageInitial: string | null;
+  weightInitialKg: number | null;
+  karnofskyScore: number | null;
+  referred: string | null;
+  referredOrigin: string | null;
+  siteCode: string;
+  siteName: string;
+};
+
+export type InitiationRecordPage = {
+  content: InitiationRecord[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export function fetchInitiationSummary(months: number, scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  return get<InitiationSummary>(`/api/v1/initiations/summary?${params}`);
+}
+
+export function fetchInitiationRecords(opts: {
+  months: number;
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('months', String(opts.months));
+  appendScope(params, opts);
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<InitiationRecordPage>(`/api/v1/initiations/records?${params}`);
+}
+
+export async function downloadInitiationCsv(months: number, scope: GeoScopeQ): Promise<void> {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  await downloadCsv(`/api/v1/initiations/records.csv?${params}`, `initiations-${months}m.csv`);
+}
+
+// --- Closures (clôtures) ---------------------------------------------------
+
+export type ClosureSummary = {
+  totalAllTime: number;
+  inPeriod: number;
+  deaths: number;
+  transfers: number;
+  mortalityPct: number | null;
+  yearly: YearBucket[];
+  types: Bucket[];
+  deathCauses: Bucket[];
+  periodMonths: number;
+};
+
+export type ClosureRecord = {
+  id: number;
+  patientId: number;
+  patientCode: string | null;
+  closureDate: string | null;
+  closureType: string | null;
+  deathDate: string | null;
+  actualDeathDate: string | null;
+  deathCauseCode: string | null;
+  deathCauseText: string | null;
+  transferDate: string | null;
+  transferDestination: string | null;
+  transferReason: string | null;
+  voluntaryStopDate: string | null;
+  hivNegativeDate: string | null;
+  siteCode: string;
+  siteName: string;
+};
+
+export type ClosureRecordPage = {
+  content: ClosureRecord[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export function fetchClosureSummary(months: number, scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  return get<ClosureSummary>(`/api/v1/closures/summary?${params}`);
+}
+
+export function fetchClosureRecords(opts: {
+  months: number;
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('months', String(opts.months));
+  appendScope(params, opts);
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<ClosureRecordPage>(`/api/v1/closures/records?${params}`);
+}
+
+export async function downloadClosureCsv(months: number, scope: GeoScopeQ): Promise<void> {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  await downloadCsv(`/api/v1/closures/records.csv?${params}`, `clotures-${months}m.csv`);
+}
+
+// --- IVSA (sub-module de Clinique) -----------------------------------------
+
+export type IvsaSummary = {
+  totalAllTime: number;
+  inPeriod: number;
+  successConfirmed: number;
+  withAlertSigns: number;
+  successPct: number | null;
+  msdDistribution: Bucket[];
+  periodMonths: number;
+};
+
+export type IvsaRow = {
+  id: number;
+  patientId: number;
+  patientCode: string | null;
+  visitDate: string | null;
+  nextVisitDate: string | null;
+  msdCode: string | null;
+  successConfirmationDate: string | null;
+  alertSignsCount: number | null;
+  neuroSignsCount: number | null;
+  weightKg: number | null;
+  temperatureC: number | null;
+  siteCode: string;
+  siteName: string;
+};
+
+export type IvsaPage = {
+  content: IvsaRow[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export function fetchIvsaSummary(months: number, scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  return get<IvsaSummary>(`/api/v1/clinic/ivsa/summary?${params}`);
+}
+
+export function fetchIvsaVisits(opts: {
+  months: number;
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('months', String(opts.months));
+  appendScope(params, opts);
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<IvsaPage>(`/api/v1/clinic/ivsa/visits?${params}`);
+}
+
+export async function downloadIvsaCsv(months: number, scope: GeoScopeQ): Promise<void> {
+  const params = new URLSearchParams();
+  params.set('months', String(months));
+  appendScope(params, scope);
+  await downloadCsv(`/api/v1/clinic/ivsa/visits.csv?${params}`, `ivsa-${months}m.csv`);
 }
 
 // --- Users (Keycloak admin) ------------------------------------------------
@@ -856,4 +1327,66 @@ export async function downloadPharmacyCsv(months: number, scope: GeoScopeQ): Pro
   appendScope(params, scope);
   const url = `/api/v1/pharmacy/dispensations.csv?${params}`;
   await downloadCsv(url, `pharmacie-${months}m.csv`);
+}
+
+// --- Sync rejected records -------------------------------------------------
+
+export type RejectBucket = 'open' | 'resolved' | 'all';
+
+export type RejectRow = {
+  id: number;
+  batchId: number | null;
+  entityType: string;
+  sourceUuid: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  rejectedAt: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
+  siteCode: string | null;
+  siteName: string | null;
+};
+
+export type RejectsPage = {
+  content: RejectRow[];
+  total: number;
+  page: number;
+  size: number;
+};
+
+export type RejectsEntityCount = { entityType: string; count: number };
+
+export function fetchSyncRejects(opts: {
+  regionId?: number;
+  districtId?: number;
+  siteId?: number;
+  entityType?: string;
+  errorCode?: string;
+  bucket?: RejectBucket;
+  sort?: SortQ;
+  page?: number;
+  size?: number;
+}) {
+  const params = new URLSearchParams();
+  if (opts.regionId)   params.set('regionId',   String(opts.regionId));
+  if (opts.districtId) params.set('districtId', String(opts.districtId));
+  if (opts.siteId)     params.set('siteId',     String(opts.siteId));
+  if (opts.entityType) params.set('entityType', opts.entityType);
+  if (opts.errorCode)  params.set('errorCode',  opts.errorCode);
+  params.set('bucket', opts.bucket ?? 'open');
+  appendSort(params, opts.sort ?? null);
+  params.set('page', String(opts.page ?? 0));
+  params.set('size', String(opts.size ?? 50));
+  return get<RejectsPage>(`/api/v1/sync/rejected?${params}`);
+}
+
+export function fetchSyncRejectsOpenCounts(scope: GeoScopeQ) {
+  const params = new URLSearchParams();
+  appendScope(params, scope);
+  return get<RejectsEntityCount[]>(`/api/v1/sync/rejected/counts?${params}`);
+}
+
+export function resolveSyncReject(id: number, note?: string) {
+  return send<void>('POST', `/api/v1/sync/rejected/${id}/resolve`, { note });
 }

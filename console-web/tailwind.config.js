@@ -43,6 +43,25 @@ export default {
         card: '0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 0 rgb(0 0 0 / 0.05)',
         elevated: '0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06)',
       },
+      keyframes: {
+        // GlobalLoader: a thin teal bar that grows from left to right,
+        // pauses briefly near the end and restarts. Conveys "something is
+        // happening" without claiming any actual % progress.
+        progress: {
+          '0%':   { transform: 'scaleX(0)' },
+          '50%':  { transform: 'scaleX(0.7)' },
+          '100%': { transform: 'scaleX(1)' },
+        },
+        // Skeleton shimmer: a soft horizontal sweep across placeholder blocks.
+        shimmer: {
+          '0%':   { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+      },
+      animation: {
+        progress: 'progress 1.4s ease-in-out infinite',
+        shimmer:  'shimmer 1.6s linear infinite',
+      },
     },
   },
   plugins: [],

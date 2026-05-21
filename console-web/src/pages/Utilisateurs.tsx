@@ -8,6 +8,7 @@ import {
 import { Search, ShieldCheck, UserPlus } from 'lucide-react';
 import { formatInt } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
+import { TableSkeleton } from '../components/Skeleton';
 
 function formatTimestamp(ms: number | null): string {
   if (!ms) return '—';
@@ -117,10 +118,11 @@ export function Utilisateurs() {
               <th className="px-4 py-2 font-medium text-right">Actions</th>
             </tr>
           </thead>
+          {users.isLoading ? (
+            <TableSkeleton rows={8} cols={7} />
+          ) : (
           <tbody className="divide-y divide-slate-100">
-            {users.isLoading ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-muted">Chargement…</td></tr>
-            ) : users.isError ? (
+            {users.isError ? (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-rose-600">
                 Erreur de chargement — vérifie que le client <code>sigdep-console-admin</code> est bien configuré.
               </td></tr>
@@ -171,6 +173,7 @@ export function Utilisateurs() {
               </tr>
             ))}
           </tbody>
+          )}
         </table>
       </div>
 

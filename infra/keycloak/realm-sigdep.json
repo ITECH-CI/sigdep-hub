@@ -12,6 +12,12 @@
   "ssoSessionIdleTimeout": 3600,
   "ssoSessionMaxLifespan": 36000,
 
+  "loginTheme": "sigdep",
+
+  "internationalizationEnabled": true,
+  "supportedLocales": ["fr", "en"],
+  "defaultLocale": "fr",
+
   "roles": {
     "realm": [
       { "name": "SUPER_ADMIN",     "description": "Full administration of the platform" },

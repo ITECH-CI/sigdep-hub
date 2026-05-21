@@ -74,7 +74,8 @@ public class SyncBatchLogger {
     /** Close out the row with the final counts. Silent on errors. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void finish(long auditId, Instant startedAt,
-                       int accepted, int rejected, List<RecordError> errors) {
+                       int accepted, int rejected, List<RecordError> errors,
+                       Long siteId, String entityType) {
         if (auditId <= 0) return;
         try {
             String status = rejected == 0 ? "ok" : "partial";
@@ -90,9 +91,41 @@ public class SyncBatchLogger {
                     accepted, rejected,
                     java.sql.Timestamp.from(now), (int) durationMs,
                     status, sample, auditId);
+            // Per-row rejects: every error becomes a row in audit.rejected_record
+            // so operators can find which specific OpenMRS UUID failed without
+            // grepping the aggregated error_sample.
+            if (errors != null && !errors.isEmpty()) {
+                insertRejects(auditId, siteId, entityType, errors);
+            }
         } catch (Exception ex) {
             log.warn("Failed to close audit.sync_batch row {}: {}", auditId, ex.toString());
         }
+    }
+
+    /**
+     * Bulk-insert one row per reject. Done in the same {@code REQUIRES_NEW}
+     * transaction as the audit update so a partial failure here doesn't leave
+     * the audit row half-closed.
+     */
+    private void insertRejects(long auditId, Long siteId, String entityType,
+                               List<RecordError> errors) {
+        if (errors.isEmpty()) return;
+        List<Object[]> batch = new java.util.ArrayList<>(errors.size());
+        for (RecordError e : errors) {
+            batch.add(new Object[]{
+                    auditId,
+                    siteId,
+                    entityType,
+                    e.sourceUuid() == null ? "unknown" : e.sourceUuid().toString(),
+                    e.code(),
+                    e.message() == null ? null : truncate(e.message(), 4000),
+            });
+        }
+        jdbc.batchUpdate(
+                "INSERT INTO audit.rejected_record"
+              + "  (batch_id, site_id, entity_type, source_uuid, error_code, error_message)"
+              + "  VALUES (?, ?, ?, ?, ?, ?)",
+                batch);
     }
 
     /** Mark the row failed (an exception escaped the writer). Silent on errors. */
@@ -117,15 +150,31 @@ public class SyncBatchLogger {
     }
 
     /**
-     * Group errors by a coarse "label" (code or message) and keep the top
-     * {@value #MAX_ERROR_SAMPLE} entries by count. Avoids storing the full
-     * per-row error list, which can be thousands long.
+     * Group errors by a coarse "label" and keep the top {@value #MAX_ERROR_SAMPLE}
+     * entries by count. The label is the code when it's meaningful on its own
+     * (UNKNOWN_PATIENT, SITE_NOT_FOUND, ...), and "code: short-message" for
+     * generic codes (UPSERT_FAILED) so we don't lose the actual SQL / runtime
+     * cause when grouping. Avoids storing the full per-row error list, which
+     * can be thousands long.
      */
+    private static final java.util.Set<String> GENERIC_CODES =
+            java.util.Set.of("UPSERT_FAILED");
+
     private static List<Map<String, Object>> buildErrorSample(List<RecordError> errors) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (RecordError e : errors) {
-            String label = e.code() != null && !e.code().isBlank() ? e.code()
-                    : (e.message() != null ? truncate(e.message(), 120) : "unknown");
+            String code = e.code() == null || e.code().isBlank() ? null : e.code();
+            String message = e.message();
+            String label;
+            if (code != null && GENERIC_CODES.contains(code) && message != null && !message.isBlank()) {
+                label = code + ": " + truncate(message, 200);
+            } else if (code != null) {
+                label = code;
+            } else if (message != null && !message.isBlank()) {
+                label = truncate(message, 200);
+            } else {
+                label = "unknown";
+            }
             counts.merge(label, 1, Integer::sum);
         }
         return counts.entrySet().stream()

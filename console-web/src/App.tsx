@@ -11,7 +11,8 @@ import { Pepfar } from "./pages/Pepfar";
 import { Tpt } from "./pages/Tpt";
 import { Clinique } from "./pages/Clinique";
 import { Pharmacie } from "./pages/Pharmacie";
-import { Stub } from "./pages/Stub";
+import { Depistage } from "./pages/Depistage";
+import { Ptme } from "./pages/Ptme";
 import { Synchronisation } from "./pages/Synchronisation";
 import { Utilisateurs } from "./pages/Utilisateurs";
 
@@ -39,8 +40,8 @@ export function App() {
         <Route path="sites" element={<Sites />} />
         <Route path="clinique" element={<Clinique />} />
         <Route path="pharmacie" element={<Pharmacie />} />
-        <Route path="depistage" element={<Stub title="Dépistage" />} />
-        <Route path="ptme" element={<Stub title="PTME" />} />
+        <Route path="depistage" element={<Depistage />} />
+        <Route path="ptme" element={<Ptme />} />
         <Route path="tpt" element={<Tpt />} />
         <Route path="biologie" element={<Biologie />} />
         <Route path="sync" element={<Synchronisation />} />

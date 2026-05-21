@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      HIV screening records. Source: OpenMRS "hivscreening" module
+      (its own dedicated MySQL tables, not encounters/obs). One row per
+      hiv_screening_hiv_screening on the site side.
+
+      Important: a screening carries no patient_id — it is anonymous from
+      our point of view. The screening_code is the local opaque identifier
+      kept here for traceability. Cross-linking with core.patients is out
+      of scope for now.
+
+      Categorical fields stored as text (the agent decodes the upstream
+      integer codes to human-readable labels before sending).
+    -->
+    <changeSet id="031-create-screenings" author="itechciv" failOnError="true">
+        <createTable tableName="screenings" schemaName="core">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_screening_site"
+                             references="core.sites(id)"/>
+            </column>
+            <column name="source_uuid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Identification -->
+            <column name="screening_code" type="VARCHAR(40)"/>
+            <column name="screening_date" type="DATE"/>
+            <column name="result_announcing_date" type="DATE"/>
+
+            <!-- Demographics -->
+            <column name="gender" type="VARCHAR(2)"/>
+            <column name="age" type="SMALLINT"/>
+            <column name="profession" type="VARCHAR(255)"/>
+            <column name="residence" type="VARCHAR(255)"/>
+            <column name="marital_status" type="VARCHAR(40)"/>
+            <column name="other_marital_status" type="VARCHAR(255)"/>
+
+            <!-- Context -->
+            <column name="population_type" type="VARCHAR(40)"
+                    remarks="Population Générale / UD / TS / HSH / PC / Autres"/>
+            <column name="screening_reason" type="VARCHAR(60)"
+                    remarks="IST / AES / PrEP / Femme enceinte / ..."/>
+            <column name="other_screening_reason" type="VARCHAR(255)"/>
+
+            <!-- Test reactions: R / NR / null -->
+            <column name="test1_reaction" type="VARCHAR(4)"/>
+            <column name="test2_reaction" type="VARCHAR(4)"/>
+            <column name="test3_reaction" type="VARCHAR(4)"/>
+            <column name="test1_invalidated" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="test2_invalidated" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="test3_invalidated" type="BOOLEAN" defaultValueBoolean="false"/>
+
+            <!-- Outcome -->
+            <column name="final_result" type="VARCHAR(4)"
+                    remarks="POS / NEG / IND"/>
+            <column name="retesting" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="comment" type="TEXT"/>
+
+            <!-- Register info -->
+            <column name="screening_site_type" type="VARCHAR(80)"/>
+            <column name="screening_post" type="VARCHAR(80)"/>
+
+            <column name="extra_data" type="JSONB"
+                    remarks="Catch-all (e.g. raw upstream integer codes)"/>
+
+            <column name="voided" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="screenings" schemaName="core"
+                             columnNames="site_id, source_uuid"
+                             constraintName="uq_screening_site_source"/>
+
+        <createIndex tableName="screenings" schemaName="core" indexName="idx_screening_site_date">
+            <column name="site_id"/>
+            <column name="screening_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="screenings" schemaName="core" indexName="idx_screening_result">
+            <column name="final_result"/>
+        </createIndex>
+        <createIndex tableName="screenings" schemaName="core" indexName="idx_screening_population">
+            <column name="population_type"/>
+        </createIndex>
+        <createIndex tableName="screenings" schemaName="core" indexName="idx_screening_reason">
+            <column name="screening_reason"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="screenings" schemaName="core"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

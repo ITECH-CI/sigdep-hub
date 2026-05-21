@@ -35,6 +35,11 @@ services:
       - "8180:8080"
     volumes:
       - ./keycloak/realm-sigdep.json:/opt/keycloak/data/import/realm-sigdep.json:ro
+      # SIGDEP custom login theme. Mounted read-only ; Keycloak picks it
+      # up at startup. Activated by realm.loginTheme = "sigdep" in
+      # realm-sigdep.json — change there if you want to toggle back to
+      # the stock theme.
+      - ./keycloak/themes/sigdep:/opt/keycloak/themes/sigdep:ro
 
   nginx:
     image: nginx:1.27-alpine

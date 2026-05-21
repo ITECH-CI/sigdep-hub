@@ -7,6 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
 import { StatusBadge, type BadgeTone } from '../components/StatusBadge';
+import { TableSkeleton } from '../components/Skeleton';
 
 const STATUS_TABS: { value: SiteStatus; label: string }[] = [
   { value: 'all',     label: 'Tous' },
@@ -103,10 +104,11 @@ export function Sites() {
               <th className="px-4 py-2 font-medium">SIGDEP</th>
             </tr>
           </thead>
+          {sites.isLoading ? (
+            <TableSkeleton rows={8} cols={7} />
+          ) : (
           <tbody className="divide-y divide-slate-100">
-            {sites.isLoading ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-muted">Chargement…</td></tr>
-            ) : sites.isError ? (
+            {sites.isError ? (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-rose-600">Erreur de chargement</td></tr>
             ) : sites.data?.content.length === 0 ? (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-muted">Aucun site</td></tr>
@@ -132,6 +134,7 @@ export function Sites() {
               );
             })}
           </tbody>
+          )}
         </table>
       </div>
 

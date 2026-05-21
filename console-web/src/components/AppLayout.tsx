@@ -7,6 +7,7 @@ import {
   ShieldCheck, Stethoscope, Syringe, Users, type LucideIcon,
 } from "lucide-react";
 import { getAccessToken } from "../auth";
+import { GlobalLoader } from "./GlobalLoader";
 
 type NavItem = {
   to: string;
@@ -111,6 +112,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen flex bg-slate-50">
+      <GlobalLoader />
       {/* Sidebar */}
       <aside
         className={`shrink-0 border-r border-slate-200 bg-white flex flex-col

@@ -184,7 +184,7 @@ public class PatientQueryService {
                 """
                 SELECT p.id, p.source_uuid, p.sex, p.birth_date,
                        p.profession, p.education_level, p.marital_status,
-                       p.birth_place,
+                       p.birth_place, p.religion,
                        s.code AS site_code, s.name AS site_name
                 FROM core.patients p
                 JOIN core.sites s ON s.id = p.site_id
@@ -201,6 +201,7 @@ public class PatientQueryService {
                             rs.getString("education_level"),
                             rs.getString("marital_status"),
                             rs.getString("birth_place"),
+                            rs.getString("religion"),
                             rs.getString("site_code"),
                             rs.getString("site_name"),
                             jdbc.queryForList(
@@ -220,6 +221,7 @@ public class PatientQueryService {
             String educationLevel,
             String maritalStatus,
             String birthPlace,
+            String religion,
             String siteCode,
             String siteName,
             List<String> identifiers

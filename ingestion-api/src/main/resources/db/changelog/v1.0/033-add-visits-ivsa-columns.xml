@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      IVSA (Initiative pour la Visite Sans rendez-vous Améliorée).
+      C'est un sous-module de la fiche de suivi : la section IVSA n'est
+      activée que pour les patients "non stables", sélectionnés via le
+      concept "Modèle de soins différenciés" (MSD = 1/2/3, 2 = IVSA).
+
+      On promeut 4 colonnes minimales sur core.visits pour pouvoir
+      filtrer/agréger les visites IVSA sans avoir à scanner extra_data
+      à chaque requête. Le détail complet (signes d'alerte cochés,
+      examens, composantes du paquet) reste dans visits.extra_data.
+    -->
+    <!--
+      Note: ivsa_success_confirmation_date already exists on core.visits
+      since changeset 008. We only add the MSD label and the two derived
+      counts here.
+    -->
+    <changeSet id="033-add-visits-ivsa-columns" author="itechciv" failOnError="true">
+        <addColumn tableName="visits" schemaName="core">
+            <column name="ivsa_msd_code" type="VARCHAR(40)"
+                    remarks="Modèle de soins différenciés (label décodé : Standard / IVSA / Échec)"/>
+            <column name="ivsa_alert_signs_count" type="SMALLINT"
+                    remarks="Nombre de signes d'alerte cochés à la visite (concept 165369)"/>
+            <column name="ivsa_neuro_signs_count" type="SMALLINT"
+                    remarks="Nombre de signes neurologiques cochés à la visite (concept 165324)"/>
+        </addColumn>
+
+        <createIndex tableName="visits" schemaName="core" indexName="idx_visits_ivsa">
+            <column name="site_id"/>
+            <column name="ivsa_msd_code"/>
+            <column name="visit_date" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="visits" schemaName="core" indexName="idx_visits_ivsa"/>
+            <dropColumn tableName="visits" schemaName="core">
+                <column name="ivsa_msd_code"/>
+                <column name="ivsa_alert_signs_count"/>
+                <column name="ivsa_neuro_signs_count"/>
+            </dropColumn>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

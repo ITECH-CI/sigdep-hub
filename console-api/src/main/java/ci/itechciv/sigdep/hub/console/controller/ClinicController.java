@@ -4,6 +4,9 @@ import ci.itechciv.sigdep.hub.console.security.AuthScope;
 import ci.itechciv.sigdep.hub.console.security.AuthScope.Scope;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService.ClinicSummary;
+import ci.itechciv.sigdep.hub.domain.service.ClinicService.IvsaPage;
+import ci.itechciv.sigdep.hub.domain.service.ClinicService.IvsaRow;
+import ci.itechciv.sigdep.hub.domain.service.ClinicService.IvsaSummary;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService.VisitPage;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService.VisitRow;
 import jakarta.servlet.http.HttpServletResponse;
@@ -96,6 +99,83 @@ public class ClinicController {
                 w.print(v.nextVisitDate() == null ? "" : v.nextVisitDate().format(df)); w.print(';');
                 w.print(csv(v.siteCode())); w.print(';');
                 w.println(csv(v.siteName()));
+            }
+        }
+    }
+
+    // --- IVSA sub-module --------------------------------------------------
+
+    @GetMapping("/ivsa/summary")
+    public IvsaSummary ivsaSummary(
+            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) Long regionId,
+            @RequestParam(required = false) Long districtId,
+            @RequestParam(required = false) Long siteId) {
+        Scope s = authScope.effective(regionId, districtId, siteId);
+        return service.ivsaSummary(Math.max(1, Math.min(120, months)),
+                s.regionId(), s.districtId(), s.siteId());
+    }
+
+    @GetMapping("/ivsa/visits")
+    public IvsaPage ivsaVisits(
+            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) Long regionId,
+            @RequestParam(required = false) Long districtId,
+            @RequestParam(required = false) Long siteId,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String dir,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Scope s = authScope.effective(regionId, districtId, siteId);
+        return service.ivsaVisits(Math.max(1, Math.min(120, months)),
+                s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
+    }
+
+    @GetMapping(value = "/ivsa/visits.csv", produces = "text/csv;charset=UTF-8")
+    public void ivsaVisitsCsv(
+            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) Long regionId,
+            @RequestParam(required = false) Long districtId,
+            @RequestParam(required = false) Long siteId,
+            HttpServletResponse response) throws IOException {
+
+        int safeMonths = Math.max(1, Math.min(120, months));
+        Scope s = authScope.effective(regionId, districtId, siteId);
+        IvsaPage page = service.ivsaVisits(safeMonths,
+                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
+
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"ivsa-" + safeMonths + "m.csv\"");
+
+        DateTimeFormatter df = DateTimeFormatter.ISO_LOCAL_DATE;
+        try (PrintWriter w = response.getWriter()) {
+            w.write('﻿');
+            w.println("date_visite;patient_code;msd;date_succes;signes_alerte;signes_neuro;"
+                    + "poids_kg;temperature_c;prochaine_visite;site_code;site_nom");
+            for (IvsaRow r : page.content()) {
+                w.print(r.visitDate() == null ? "" : r.visitDate().format(df));
+                w.print(';');
+                w.print(csv(r.patientCode()));
+                w.print(';');
+                w.print(csv(r.msdCode()));
+                w.print(';');
+                w.print(r.successConfirmationDate() == null ? "" : r.successConfirmationDate().format(df));
+                w.print(';');
+                w.print(r.alertSignsCount() == null ? "" : r.alertSignsCount().toString());
+                w.print(';');
+                w.print(r.neuroSignsCount() == null ? "" : r.neuroSignsCount().toString());
+                w.print(';');
+                w.print(r.weightKg() == null ? "" : r.weightKg().toPlainString());
+                w.print(';');
+                w.print(r.temperatureC() == null ? "" : r.temperatureC().toPlainString());
+                w.print(';');
+                w.print(r.nextVisitDate() == null ? "" : r.nextVisitDate().format(df));
+                w.print(';');
+                w.print(csv(r.siteCode()));
+                w.print(';');
+                w.println(csv(r.siteName()));
             }
         }
     }

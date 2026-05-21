@@ -6,6 +6,10 @@ node_modules/
 dist/
 .vite/
 
+# Side-checkout of sigdep-contracts done by the CI inside the workspace
+# (actions/checkout refuses paths outside the workspace).
+.sigdep-contracts/
+
 # IDE
 .idea/
 .vscode/

@@ -36,32 +36,22 @@ infra/nginx/certs/
 
 `nginx.prod.conf` mounts this directory read-only into the container.
 
-### 2. Build the SPA bundle
+### 2. Pull the published images
 
-```bash
-cd console-web && npm install && npm run build
-mkdir -p ../infra/web
-cp -R dist/* ../infra/web/
-```
+Three images are published to GHCR on every `v*.*.*` tag by the
+[`release.yml`](../.github/workflows/release.yml) workflow:
 
-`infra/web/` is mounted into the nginx container at
-`/usr/share/nginx/html`. Repeat after every SPA change.
+- `ghcr.io/<owner>/sigdep-ingestion-api:<version>`
+- `ghcr.io/<owner>/sigdep-console-api:<version>`
+- `ghcr.io/<owner>/sigdep-console-web:<version>` (serves the SPA on
+  port 80, fronted by the prod nginx)
 
-### 3. Tag and publish the API images
+The compose file resolves them via `INGESTION_API_IMAGE`,
+`CONSOLE_API_IMAGE`, `CONSOLE_WEB_IMAGE` env vars (see §3). No host-side
+SPA build is needed any more — the `console-web` image embeds the
+bundle.
 
-The compose file references `CONSOLE_API_IMAGE` and
-`INGESTION_API_IMAGE`. Build them with the Spring Boot Maven plugin or
-your CI of choice and push to a registry the host can pull from
-(GitHub Container Registry, Docker Hub, internal Harbor, …).
-
-```bash
-mvn -pl console-api,ingestion-api -am -DskipTests package
-# Then build container images on top of the resulting fat JARs. A
-# minimal Dockerfile is one COPY + ENTRYPOINT java -jar. CI templates
-# for this are on the roadmap.
-```
-
-### 4. Set secrets
+### 3. Set secrets
 
 `docker-compose.prod.yml` reads sensitive values from environment
 variables. Put them in `/etc/sigdep/sigdep-hub.env` (mode 0600) or use
@@ -74,8 +64,9 @@ KC_DB_PASSWORD=...
 KEYCLOAK_ADMIN_CLIENT_SECRET=...
 KC_HOSTNAME=https://sigdep.example.org
 PUBLIC_ORIGIN=https://sigdep.example.org
-CONSOLE_API_IMAGE=ghcr.io/itech-ci/sigdep-console-api:0.1.0
-INGESTION_API_IMAGE=ghcr.io/itech-ci/sigdep-ingestion-api:0.1.0
+CONSOLE_API_IMAGE=ghcr.io/<owner>/sigdep-console-api:<version>
+INGESTION_API_IMAGE=ghcr.io/<owner>/sigdep-ingestion-api:<version>
+CONSOLE_WEB_IMAGE=ghcr.io/<owner>/sigdep-console-web:<version>
 ```
 
 Then run compose with the file:
@@ -85,7 +76,7 @@ docker compose --env-file /etc/sigdep/sigdep-hub.env \
   -f docker-compose.prod.yml up -d
 ```
 
-### 5. Bootstrap the Keycloak realm
+### 4. Bootstrap the Keycloak realm
 
 The first `--import-realm` start loads `realm-sigdep.json`. Then apply
 the user-profile (see `infra/keycloak/README.md`). Finally, **change
@@ -96,7 +87,7 @@ every default password** in the realm before the first user logs in:
   in `realm-sigdep.json` — these are dev-only, delete or reset them.
 - The `sigdep-console-admin` and `sigdep-agent` client secrets.
 
-### 6. Wire the agents
+### 5. Wire the agents
 
 Each `sigdep-sync` site agent needs:
 

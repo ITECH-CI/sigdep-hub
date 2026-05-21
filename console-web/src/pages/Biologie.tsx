@@ -25,6 +25,7 @@ import { GeoFilter, GeoScope } from "../components/GeoFilter";
 import { Kpi, formatInt, formatPercent } from "../components/Kpi";
 import { PageHeader } from "../components/PageHeader";
 import { SortableTh, SortState } from "../components/SortableTh";
+import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from "../components/Skeleton";
 
 const PERIODS = [
   { months: 12, label: "12 derniers mois" },
@@ -136,40 +137,36 @@ export function Biologie() {
       />
 
       {/* KPIs */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
-        <Kpi
-          label="Examens (cumul)"
-          value={
-            summary.isError ? "Erreur" : formatInt(summary.data?.examsAllTime)
-          }
-          hint="Toutes périodes"
-          hintTone="neutral"
-        />
-        <Kpi
-          label="Examens (période)"
-          value={
-            summary.isError ? "Erreur" : formatInt(summary.data?.examsInPeriod)
-          }
-          hint={`${PERIODS.find((p) => p.months === months)?.label}`}
-          hintTone="neutral"
-        />
-        <Kpi
-          label="Suppression virale"
-          value={
-            summary.isError
-              ? "Erreur"
-              : formatPercent(summary.data?.viralSuppressionPct ?? null)
-          }
-          hint="CV < 1000 copies/mL"
-          hintTone="positive"
-        />
-        <Kpi
-          label="Dernier examen"
-          value={formatDate(summary.data?.lastExamDate ?? null)}
-          hint="Date la plus récente"
-          hintTone="neutral"
-        />
-      </div>
+      {summary.isLoading ? <KpiRowSkeleton /> : (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
+          <Kpi
+            label="Examens (cumul)"
+            value={summary.isError ? "Erreur" : formatInt(summary.data?.examsAllTime)}
+            hint="Toutes périodes"
+            hintTone="neutral"
+          />
+          <Kpi
+            label="Examens (période)"
+            value={summary.isError ? "Erreur" : formatInt(summary.data?.examsInPeriod)}
+            hint={`${PERIODS.find((p) => p.months === months)?.label}`}
+            hintTone="neutral"
+          />
+          <Kpi
+            label="Suppression virale"
+            value={summary.isError
+                ? "Erreur"
+                : formatPercent(summary.data?.viralSuppressionPct ?? null)}
+            hint="CV < 1000 copies/mL"
+            hintTone="positive"
+          />
+          <Kpi
+            label="Dernier examen"
+            value={formatDate(summary.data?.lastExamDate ?? null)}
+            hint="Date la plus récente"
+            hintTone="neutral"
+          />
+        </div>
+      )}
 
       {/* Two-column charts */}
       <div className="grid gap-3 lg:grid-cols-2 mb-6">
@@ -177,9 +174,7 @@ export function Biologie() {
           <CardHeader title="Suppression virale par mois · % < 1000 copies/mL" />
           <div className="h-56 p-4">
             {summary.isLoading ? (
-              <div className="h-full flex items-center justify-center text-ink-muted text-sm">
-                Chargement…
-              </div>
+              <ChartSkeleton height="h-56" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
@@ -324,21 +319,12 @@ export function Biologie() {
               <SortableTh k="site" sort={sort} onSort={onSort}>Site</SortableTh>
             </tr>
           </thead>
+          {exams.isLoading ? (
+            <TableSkeleton rows={8} cols={5} />
+          ) : (
           <tbody className="divide-y divide-slate-100">
             {(() => {
               const colSpan = tab === "cd4" ? 5 : 5;
-              if (exams.isLoading) {
-                return (
-                  <tr>
-                    <td
-                      colSpan={colSpan}
-                      className="px-4 py-6 text-center text-ink-muted"
-                    >
-                      Chargement…
-                    </td>
-                  </tr>
-                );
-              }
               if (exams.isError) {
                 return (
                   <tr>
@@ -401,6 +387,7 @@ export function Biologie() {
               ));
             })()}
           </tbody>
+          )}
         </table>
 
         {exams.data && exams.data.total > size && (

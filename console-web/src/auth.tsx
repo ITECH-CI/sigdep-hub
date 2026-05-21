@@ -22,6 +22,11 @@ const oidcConfig = {
   scope: 'openid profile email',
   userStore: new WebStorageStateStore({ store: window.localStorage }),
   automaticSilentRenew: true,
+  // Force the Keycloak login page in French regardless of the browser's
+  // Accept-Language. Keycloak honours ui_locales (OIDC standard) before
+  // falling back to the realm's defaultLocale ; users can still switch
+  // via the language dropdown on the login page.
+  extraQueryParams: { ui_locales: 'fr' },
   onSigninCallback: () => {
     // Strip ?code=&state= from the URL after the callback completes.
     window.history.replaceState({}, document.title, window.location.pathname);

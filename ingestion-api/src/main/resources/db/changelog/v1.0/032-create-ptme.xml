@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      PTME (Prévention de la Transmission Mère-Enfant). Source: OpenMRS
+      "ptme" module — dedicated MySQL tables. We mirror the two registers
+      (mother / child) and their follow-up visits.
+
+      Demographics are stripped at the agent; we keep opaque local codes
+      for traceability (pregnant_number, hiv_care_number, screening_number,
+      child_followup_number). No FK to core.patients — PTME stays a silo
+      for now.
+
+      child.mother_source_uuid lets us cross-link mère↔enfant on the hub
+      side without storing names. Soft (no FK) because the mother row may
+      land in a later sync cycle.
+    -->
+
+    <changeSet id="032-create-ptme-mothers" author="itechciv" failOnError="true">
+        <createTable tableName="ptme_mothers" schemaName="core">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ptme_mother_site"
+                             references="core.sites(id)"/>
+            </column>
+            <column name="source_uuid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="pregnant_number" type="VARCHAR(80)"/>
+            <column name="hiv_care_number" type="VARCHAR(80)"/>
+            <column name="screening_number" type="VARCHAR(80)"/>
+            <column name="age" type="SMALLINT"/>
+            <column name="marital_status" type="VARCHAR(40)"/>
+            <column name="spousal_screening" type="VARCHAR(20)"/>
+            <column name="spousal_screening_result" type="VARCHAR(4)"/>
+
+            <column name="start_date" type="DATE"/>
+            <column name="end_date" type="DATE"/>
+            <column name="arv_status_at_registering" type="VARCHAR(80)"/>
+            <column name="estimated_delivery_date" type="DATE"/>
+            <column name="pregnancy_outcome" type="VARCHAR(40)"/>
+            <column name="spousal_screening_date" type="DATE"/>
+            <column name="delivery_type" type="VARCHAR(20)"/>
+
+            <column name="extra_data" type="JSONB"/>
+            <column name="voided" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="ptme_mothers" schemaName="core"
+                             columnNames="site_id, source_uuid"
+                             constraintName="uq_ptme_mother_site_source"/>
+
+        <createIndex tableName="ptme_mothers" schemaName="core" indexName="idx_ptme_mother_site_start">
+            <column name="site_id"/>
+            <column name="start_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="ptme_mothers" schemaName="core" indexName="idx_ptme_mother_outcome">
+            <column name="pregnancy_outcome"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="ptme_mothers" schemaName="core"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="032-create-ptme-mother-visits" author="itechciv" failOnError="true">
+        <createTable tableName="ptme_mother_visits" schemaName="core">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ptme_mvisit_site"
+                             references="core.sites(id)"/>
+            </column>
+            <column name="source_uuid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mother_source_uuid" type="VARCHAR(64)"
+                    remarks="Soft link to core.ptme_mothers.source_uuid (no FK)"/>
+
+            <column name="visit_date" type="DATE"/>
+            <column name="gestational_age" type="SMALLINT"/>
+            <column name="continuing_arv" type="VARCHAR(4)"/>
+            <column name="continuing_ctx" type="VARCHAR(4)"/>
+
+            <column name="extra_data" type="JSONB"/>
+            <column name="voided" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="ptme_mother_visits" schemaName="core"
+                             columnNames="site_id, source_uuid"
+                             constraintName="uq_ptme_mvisit_site_source"/>
+
+        <createIndex tableName="ptme_mother_visits" schemaName="core" indexName="idx_ptme_mvisit_mother">
+            <column name="mother_source_uuid"/>
+        </createIndex>
+        <createIndex tableName="ptme_mother_visits" schemaName="core" indexName="idx_ptme_mvisit_site_date">
+            <column name="site_id"/>
+            <column name="visit_date" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="ptme_mother_visits" schemaName="core"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="032-create-ptme-children" author="itechciv" failOnError="true">
+        <createTable tableName="ptme_children" schemaName="core">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ptme_child_site"
+                             references="core.sites(id)"/>
+            </column>
+            <column name="source_uuid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="mother_source_uuid" type="VARCHAR(64)"
+                    remarks="Soft link to core.ptme_mothers.source_uuid (no FK)"/>
+
+            <column name="child_followup_number" type="VARCHAR(80)"/>
+            <column name="birth_date" type="DATE"/>
+            <column name="gender" type="VARCHAR(10)"/>
+
+            <column name="arv_prophylaxis_given" type="VARCHAR(4)"/>
+            <column name="arv_prophylaxis_given_date" type="DATE"/>
+            <column name="followup_end_date" type="DATE"/>
+
+            <column name="pcr1_sampling_date" type="DATE"/>
+            <column name="age_in_week_on_pcr1" type="SMALLINT"/>
+            <column name="age_in_month_on_pcr1" type="SMALLINT"/>
+            <column name="pcr1_result" type="VARCHAR(4)"/>
+
+            <column name="pcr2_sampling_date" type="DATE"/>
+            <column name="age_in_week_on_pcr2" type="SMALLINT"/>
+            <column name="age_in_month_on_pcr2" type="SMALLINT"/>
+            <column name="pcr2_result" type="VARCHAR(4)"/>
+
+            <column name="pcr3_sampling_date" type="DATE"/>
+            <column name="age_in_week_on_pcr3" type="SMALLINT"/>
+            <column name="age_in_month_on_pcr3" type="SMALLINT"/>
+            <column name="pcr3_result" type="VARCHAR(4)"/>
+
+            <column name="ctx_initiation_date" type="DATE"/>
+            <column name="age_in_week_on_ctx_initiation" type="SMALLINT"/>
+            <column name="age_in_month_on_ctx_initiation" type="SMALLINT"/>
+
+            <column name="inh_initiation_date" type="DATE"/>
+            <column name="age_in_week_on_inh_initiation" type="SMALLINT"/>
+            <column name="age_in_month_on_inh_initiation" type="SMALLINT"/>
+
+            <column name="hiv_serology1_date" type="DATE"/>
+            <column name="age_in_week_on_serology1" type="SMALLINT"/>
+            <column name="age_in_month_on_serology1" type="SMALLINT"/>
+            <column name="hiv_serology1_result" type="VARCHAR(4)"/>
+
+            <column name="hiv_serology2_date" type="DATE"/>
+            <column name="age_in_week_on_serology2" type="SMALLINT"/>
+            <column name="age_in_month_on_serology2" type="SMALLINT"/>
+            <column name="hiv_serology2_result" type="VARCHAR(4)"/>
+
+            <column name="followup_result" type="VARCHAR(60)"/>
+            <column name="followup_result_date" type="DATE"/>
+            <column name="reference_location" type="VARCHAR(255)"/>
+
+            <column name="extra_data" type="JSONB"/>
+            <column name="voided" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="ptme_children" schemaName="core"
+                             columnNames="site_id, source_uuid"
+                             constraintName="uq_ptme_child_site_source"/>
+
+        <createIndex tableName="ptme_children" schemaName="core" indexName="idx_ptme_child_site_birth">
+            <column name="site_id"/>
+            <column name="birth_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="ptme_children" schemaName="core" indexName="idx_ptme_child_mother">
+            <column name="mother_source_uuid"/>
+        </createIndex>
+        <createIndex tableName="ptme_children" schemaName="core" indexName="idx_ptme_child_followup_result">
+            <column name="followup_result"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="ptme_children" schemaName="core"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="032-create-ptme-child-visits" author="itechciv" failOnError="true">
+        <createTable tableName="ptme_child_visits" schemaName="core">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_ptme_cvisit_site"
+                             references="core.sites(id)"/>
+            </column>
+            <column name="source_uuid" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="child_source_uuid" type="VARCHAR(64)"
+                    remarks="Soft link to core.ptme_children.source_uuid (no FK)"/>
+
+            <column name="visit_date" type="DATE"/>
+            <column name="age_in_day" type="SMALLINT"/>
+            <column name="age_in_week" type="SMALLINT"/>
+            <column name="age_in_month" type="SMALLINT"/>
+            <column name="eating_type" type="VARCHAR(80)"/>
+            <column name="modern_contraceptive_method" type="BOOLEAN"/>
+            <column name="continuing_ctx" type="VARCHAR(4)"/>
+            <column name="continuing_inh" type="VARCHAR(4)"/>
+
+            <column name="extra_data" type="JSONB"/>
+            <column name="voided" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="ptme_child_visits" schemaName="core"
+                             columnNames="site_id, source_uuid"
+                             constraintName="uq_ptme_cvisit_site_source"/>
+
+        <createIndex tableName="ptme_child_visits" schemaName="core" indexName="idx_ptme_cvisit_child">
+            <column name="child_source_uuid"/>
+        </createIndex>
+        <createIndex tableName="ptme_child_visits" schemaName="core" indexName="idx_ptme_cvisit_site_date">
+            <column name="site_id"/>
+            <column name="visit_date" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="ptme_child_visits" schemaName="core"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

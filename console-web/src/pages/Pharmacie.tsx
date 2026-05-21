@@ -12,6 +12,7 @@ import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
+import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from '../components/Skeleton';
 
 const PERIODS = [
   { months: 12, label: '12 derniers mois' },
@@ -90,24 +91,26 @@ export function Pharmacie() {
         </>} />
 
       {/* KPIs */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
-        <Kpi label="Dispensations (période)"
-             value={summary.isError ? 'Erreur' : formatInt(summary.data?.dispensationsInPeriod)}
-             hint={`${PERIODS.find(p => p.months === months)?.label}`}
-             hintTone="neutral" />
-        <Kpi label="Patients sous ARV"
-             value={summary.isError ? 'Erreur' : formatInt(summary.data?.patientsOnArvInPeriod)}
-             hint="Distincts (période)"
-             hintTone="neutral" />
-        <Kpi label="Régimes différents"
-             value={summary.isError ? 'Erreur' : formatInt(summary.data?.distinctRegimensInPeriod)}
-             hint="Sur la période"
-             hintTone="neutral" />
-        <Kpi label="% < 30 jours"
-             value={summary.isError ? 'Erreur' : formatPercent(summary.data?.shortDispensationPct ?? null)}
-             hint="Dispensations courtes"
-             hintTone="warning" />
-      </div>
+      {summary.isLoading ? <KpiRowSkeleton /> : (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
+          <Kpi label="Dispensations (période)"
+               value={summary.isError ? 'Erreur' : formatInt(summary.data?.dispensationsInPeriod)}
+               hint={`${PERIODS.find(p => p.months === months)?.label}`}
+               hintTone="neutral" />
+          <Kpi label="Patients sous ARV"
+               value={summary.isError ? 'Erreur' : formatInt(summary.data?.patientsOnArvInPeriod)}
+               hint="Distincts (période)"
+               hintTone="neutral" />
+          <Kpi label="Régimes différents"
+               value={summary.isError ? 'Erreur' : formatInt(summary.data?.distinctRegimensInPeriod)}
+               hint="Sur la période"
+               hintTone="neutral" />
+          <Kpi label="% < 30 jours"
+               value={summary.isError ? 'Erreur' : formatPercent(summary.data?.shortDispensationPct ?? null)}
+               hint="Dispensations courtes"
+               hintTone="warning" />
+        </div>
+      )}
 
       {/* Two-column charts */}
       <div className="grid gap-3 lg:grid-cols-2 mb-6">
@@ -115,7 +118,7 @@ export function Pharmacie() {
           <h3 className="text-sm font-medium mb-4">Dispensations par mois</h3>
           <div className="h-56">
             {summary.isLoading ? (
-              <div className="h-full flex items-center justify-center text-ink-muted text-sm">Chargement…</div>
+              <ChartSkeleton height="h-56" />
             ) : !summary.data || summary.data.monthly.length === 0 ? (
               <div className="h-full flex items-center justify-center text-ink-muted text-sm">—</div>
             ) : (
@@ -209,11 +212,11 @@ export function Pharmacie() {
               <SortableTh k="site"       sort={sort} onSort={onSort}>Site</SortableTh>
             </tr>
           </thead>
+          {dispensations.isLoading ? (
+            <TableSkeleton rows={8} cols={7} />
+          ) : (
           <tbody className="divide-y divide-slate-100">
             {(() => {
-              if (dispensations.isLoading) {
-                return <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-muted">Chargement…</td></tr>;
-              }
               if (dispensations.isError) {
                 return <tr><td colSpan={7} className="px-4 py-6 text-center text-rose-600">Erreur de chargement</td></tr>;
               }
@@ -240,6 +243,7 @@ export function Pharmacie() {
               ));
             })()}
           </tbody>
+          )}
         </table>
 
         {dispensations.data && dispensations.data.total > size && (
