@@ -19,9 +19,9 @@ RUN chown sigdep:sigdep /opt/sigdep/console-api.jar
 
 USER sigdep
 
-EXPOSE 8080
+EXPOSE 8041
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -q -O - http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
+  CMD wget -q -O - http://localhost:8041/actuator/health | grep -q '"status":"UP"' || exit 1
 
 ENTRYPOINT ["java", "-jar", "/opt/sigdep/console-api.jar"]

@@ -180,6 +180,7 @@ jobs:
           cp infra/docker-compose.prod.yml "deploy-build/$PKG/docker-compose.yml"
           cp -r infra/nginx                "deploy-build/$PKG/nginx"
           cp -r infra/keycloak             "deploy-build/$PKG/keycloak"
+          cp -r infra/postgres             "deploy-build/$PKG/postgres"
           cp infra/.env.example            "deploy-build/$PKG/.env.example"
 
           # Pin the image tags of this release inside the bundled .env.example

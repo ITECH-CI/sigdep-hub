@@ -3,6 +3,44 @@
 Le format suit [Keep a Changelog](https://keepachangelog.com/) et la
 plateforme adhère à [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] — 2026-05-24
+
+### Corrigé — déploiement pilote v1.0.3 inutilisable hors environnement de build
+
+- **Redirect URIs Keycloak portables** : le client SPA `sigdep-console`
+  avait `http://localhost:9000/*` codé en dur dans `realm-sigdep.json`,
+  rendant impossible la connexion depuis n'importe quelle URL prod.
+  Le realm utilise maintenant un placeholder `__PUBLIC_ORIGIN__`
+  substitué au démarrage par un entrypoint Keycloak custom
+  (`infra/keycloak/entrypoint.sh`) à partir de la variable d'env
+  `PUBLIC_ORIGIN`.
+- **Base Keycloak auto-créée** : `infra/postgres/01-init-keycloak.sh`
+  monté dans `/docker-entrypoint-initdb.d/` crée `CREATE USER keycloak`
+  + `CREATE DATABASE keycloak` au premier boot de Postgres. Fini les
+  commandes `psql` manuelles avant le 1er `docker compose up`.
+- **Healthchecks Docker pointaient sur le mauvais port** :
+  `ingestion-api` (8090) et `console-api` (8041) avaient un
+  `HEALTHCHECK` codé sur 8080, ce qui laissait les conteneurs en
+  `health: starting` indéfiniment. Corrigé dans les deux Dockerfiles.
+- **502 nginx vers Keycloak** : `proxy_buffer_size` par défaut trop
+  petit pour les headers volumineux de Keycloak (cookies de session
+  + JWT). Buffers augmentés à 16k/8×16k/32k dans `nginx.prod.conf`.
+
+### Documentation
+
+- `installer-hub.md` : section dédiée à la reconstruction d'un
+  `fullchain.pem` propre pour un cert wildcard CA commerciale
+  (saut de ligne obligatoire entre certs), avec commande de
+  vérification `openssl crl2pkcs7`.
+- Note sur les caractères spéciaux dans les mots de passe (`!`, `$`,
+  etc.) et leur échappement dans `.env`.
+
+### Tarball de déploiement
+
+- Le tarball `sigdep-hub-deploy-1.0.4.tar.gz` embarque maintenant le
+  dossier `postgres/` (script init) en plus de `keycloak/`,
+  `nginx/`, `docker-compose.yml`.
+
 ## [1.0.3] — 2026-05-21
 
 ### Ajouté

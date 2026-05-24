@@ -42,16 +42,18 @@
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
+        "__PUBLIC_ORIGIN__/*",
         "http://localhost:9000/*",
         "http://127.0.0.1:9000/*"
       ],
       "webOrigins": [
+        "__PUBLIC_ORIGIN__",
         "http://localhost:9000",
         "http://127.0.0.1:9000"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:9000/##http://127.0.0.1:9000/"
+        "post.logout.redirect.uris": "__PUBLIC_ORIGIN__/##http://localhost:9000/##http://127.0.0.1:9000/"
       },
       "fullScopeAllowed": true,
       "protocolMappers": [

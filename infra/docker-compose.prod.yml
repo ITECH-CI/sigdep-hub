@@ -18,17 +18,28 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:-sigdep}
       POSTGRES_USER:     ${POSTGRES_USER:-sigdep}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      # Passées au script init pour qu'il crée la base + user Keycloak
+      # au premier démarrage (volume postgres_data vierge).
+      KC_DB_NAME:        ${KC_DB_NAME:-keycloak}
+      KC_DB_USERNAME:    ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD:    ${KC_DB_PASSWORD:-change-me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Scripts exécutés UNE SEULE FOIS au premier boot (création base
+      # Keycloak). Ignorés ensuite tant que postgres_data n'est pas vidé.
+      - ./postgres/01-init-keycloak.sh:/docker-entrypoint-initdb.d/01-init-keycloak.sh:ro
     # No host port exposed in prod — DB is reached over the compose network.
 
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
     container_name: sigdep-keycloak
-    # `start` (not start-dev): runs the optimised, production-ready server.
+    # `start` (sans --optimized) : Keycloak applique sa build au boot.
     # Behind a TLS-terminating reverse proxy so HTTP is fine on the inside;
     # KC_PROXY_HEADERS makes Keycloak honour X-Forwarded-* from nginx.
-    command: start --optimized --import-realm
+    # L'entrypoint custom substitue __PUBLIC_ORIGIN__ dans le realm import
+    # avant de lancer kc.sh.
+    entrypoint: ["/opt/keycloak/entrypoint.sh"]
+    command: ["start", "--import-realm"]
     environment:
       KEYCLOAK_ADMIN:          ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me}
@@ -40,9 +51,14 @@ services:
       KC_HOSTNAME_STRICT:      'true'
       KC_PROXY_HEADERS:        xforwarded
       KC_HTTP_ENABLED:         'true'
+      # Utilisé par entrypoint.sh pour substituer le placeholder du realm.
+      PUBLIC_ORIGIN:           ${PUBLIC_ORIGIN:-http://localhost:9000}
     depends_on: [postgres]
     volumes:
-      - ./keycloak/realm-sigdep.json:/opt/keycloak/data/import/realm-sigdep.json:ro
+      # Realm import : monté comme template r/o ; l'entrypoint le copie
+      # dans data/import/ après substitution.
+      - ./keycloak/realm-sigdep.json:/opt/keycloak/data/import-template/realm-sigdep.json:ro
+      - ./keycloak/entrypoint.sh:/opt/keycloak/entrypoint.sh:ro
       # SIGDEP custom login theme.
       - ./keycloak/themes/sigdep:/opt/keycloak/themes/sigdep:ro
 

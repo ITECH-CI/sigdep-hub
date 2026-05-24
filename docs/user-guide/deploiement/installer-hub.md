@@ -75,25 +75,53 @@ Vous obtenez :
 │   └── certs/              # à remplir avec fullchain.pem + privkey.pem
 ├── keycloak/
 │   ├── realm-sigdep.json   # importé au premier démarrage
+│   ├── entrypoint.sh       # substitue les placeholders avant import
 │   └── themes/sigdep/      # thème de connexion SIGDEP
+├── postgres/
+│   └── 01-init-keycloak.sh # crée la base/user keycloak au 1er boot
 └── README.md
 ```
 
 ## Étape 2 — Déposer les certificats TLS
 
-```bash
-sudo cp /chemin/vers/fullchain.pem /opt/sigdep-hub/nginx/certs/
-sudo cp /chemin/vers/privkey.pem   /opt/sigdep-hub/nginx/certs/
-sudo chmod 600 /opt/sigdep-hub/nginx/certs/privkey.pem
-```
+`nginx` veut **un seul fichier** `fullchain.pem` contenant la chaîne
+complète (votre certificat suivi du / des intermédiaires de la CA),
+plus la clé privée dans `privkey.pem`.
 
-Pour Let's Encrypt avec certbot installé sur la machine :
+### Cas Let's Encrypt (certbot)
+
+certbot produit déjà un `fullchain.pem` propre :
 
 ```bash
 sudo ln -s /etc/letsencrypt/live/sigdep.pnls.ci/fullchain.pem \
            /opt/sigdep-hub/nginx/certs/fullchain.pem
 sudo ln -s /etc/letsencrypt/live/sigdep.pnls.ci/privkey.pem \
            /opt/sigdep-hub/nginx/certs/privkey.pem
+```
+
+### Cas certificat wildcard (CA commerciale, ex. Sectigo)
+
+Si vous avez un `.crt` (votre certificat seul) + un `.ca-bundle`
+(intermédiaires), il faut reconstruire un fullchain en concaténant
+les deux **avec un saut de ligne entre les deux** — sinon nginx
+échoue avec `bad end line` :
+
+```bash
+sudo bash -c '
+  cat /chemin/vers/itech-civ_org.crt > /opt/sigdep-hub/nginx/certs/fullchain.pem
+  echo "" >> /opt/sigdep-hub/nginx/certs/fullchain.pem
+  cat /chemin/vers/itech-civ_org.ca-bundle >> /opt/sigdep-hub/nginx/certs/fullchain.pem
+'
+sudo cp /chemin/vers/itech-civ.key /opt/sigdep-hub/nginx/certs/privkey.pem
+sudo chmod 600 /opt/sigdep-hub/nginx/certs/privkey.pem
+```
+
+Vérifier que le fichier est bien formé (vous devez voir au moins 2
+lignes `subject=...` : votre cert + l'intermédiaire) :
+
+```bash
+sudo openssl crl2pkcs7 -nocrl -certfile /opt/sigdep-hub/nginx/certs/fullchain.pem \
+  | sudo openssl pkcs7 -print_certs -noout | grep subject
 ```
 
 ## Étape 3 — Configurer les secrets
@@ -123,6 +151,21 @@ KEYCLOAK_ADMIN_CLIENT_SECRET=changeme
 Les tags d'images (`CONSOLE_API_IMAGE`, `INGESTION_API_IMAGE`,
 `CONSOLE_WEB_IMAGE`) sont déjà pré-remplis dans `.env.example` avec
 la version du bundle — ne pas y toucher sauf besoin spécifique.
+
+> **Points d'attention sur les mots de passe** :
+>
+> - `KC_HOSTNAME` et `PUBLIC_ORIGIN` doivent être **identiques** et
+>   correspondre à l'URL publique exacte (avec `https://`, sans slash
+>   final) : c'est la clé qui dit à Keycloak quels redirect URIs
+>   accepter pour le SPA.
+> - Évitez les caractères `!`, `$`, `` ` ``, `\` dans les mots de
+>   passe : ils sont interprétés par le shell quand vous lancez
+>   `docker compose`. Si nécessaire, encadrez la valeur avec des
+>   guillemets simples dans `.env` : `POSTGRES_PASSWORD='mot!passe'`.
+> - La base et l'utilisateur Keycloak (`keycloak`/`keycloak`) sont
+>   créés **automatiquement** au premier démarrage de Postgres par
+>   `postgres/01-init-keycloak.sh`, en utilisant `KC_DB_PASSWORD`.
+>   Aucune commande `psql` manuelle n'est nécessaire.
 
 ## Étape 4 — Démarrer la stack
 
