@@ -1108,13 +1108,14 @@ async function send<T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: u
 }
 
 export type UserRow = {
-  id: string;
-  username: string;
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  enabled: boolean;
-  emailVerified: boolean;
+  id: number;
+  email: string;
+  displayName: string;
+  role: string;
+  userLevel: string;
+  active: boolean;
+  passwordExpired: boolean;
+  lastLoginAt: number | null;
   createdAt: number | null;
   regionId: number | null;
   districtId: number | null;
@@ -1128,30 +1129,24 @@ export type UserPage = {
   size: number;
 };
 
-export type UserDetail = UserRow & { realmRoles: string[] };
+export type UserDetail = UserRow;
 
 export type CreateUserRequest = {
-  username: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  enabled?: boolean;
-  emailVerified?: boolean;
+  email: string;
+  displayName?: string;
+  role: string;
+  active?: boolean;
   password?: string;
   passwordTemporary?: boolean;
-  realmRoles?: string[];
   regionId?: number | null;
   districtId?: number | null;
   siteId?: number | null;
 };
 
 export type UpdateUserRequest = {
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  enabled?: boolean;
-  emailVerified?: boolean;
-  realmRoles?: string[];
+  displayName?: string;
+  role?: string;
+  active?: boolean;
   regionId?: number | null;
   districtId?: number | null;
   siteId?: number | null;
@@ -1169,24 +1164,47 @@ export function fetchUserRoles() {
   return get<string[]>('/api/v1/users/roles');
 }
 
-export function fetchUser(id: string) {
+export function fetchUser(id: number) {
   return get<UserDetail>(`/api/v1/users/${id}`);
 }
 
 export function createUser(req: CreateUserRequest) {
-  return send<{ id: string }>('POST', '/api/v1/users', req);
+  return send<{ id: number }>('POST', '/api/v1/users', req);
 }
 
-export function updateUser(id: string, req: UpdateUserRequest) {
+export function updateUser(id: number, req: UpdateUserRequest) {
   return send<void>('PUT', `/api/v1/users/${id}`, req);
 }
 
-export function resetUserPassword(id: string, password: string, temporary: boolean) {
+export function resetUserPassword(id: number, password: string, temporary: boolean) {
   return send<void>('POST', `/api/v1/users/${id}/password`, { password, temporary });
 }
 
-export function setUserEnabled(id: string, enabled: boolean) {
+export function setUserEnabled(id: number, enabled: boolean) {
   return send<void>('POST', `/api/v1/users/${id}/${enabled ? 'enable' : 'disable'}`);
+}
+
+// --- API keys (auth de l'agent sigdep-sync) --------------------------------
+
+export type ApiKeyStatus = {
+  present: boolean;
+  prefix: string | null;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+};
+
+export type GeneratedApiKey = { apiKey: string; prefix: string };
+
+export function fetchApiKeyStatus(siteId: number) {
+  return get<ApiKeyStatus>(`/api/v1/sites/${siteId}/api-key`);
+}
+
+export function generateApiKey(siteId: number) {
+  return send<GeneratedApiKey>('POST', `/api/v1/sites/${siteId}/api-key`);
+}
+
+export function revokeApiKey(siteId: number) {
+  return send<void>('DELETE', `/api/v1/sites/${siteId}/api-key`);
 }
 
 // --- Synchronisation -------------------------------------------------------

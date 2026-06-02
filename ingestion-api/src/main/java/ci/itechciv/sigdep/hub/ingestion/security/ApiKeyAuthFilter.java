@@ -7,7 +7,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,6 +32,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 @Component
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyAuthFilter.class);
 
     static final String HEADER = "X-API-Key";
     static final String ROLE = "ROLE_SYNC_AGENT";
@@ -63,8 +68,19 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                         List.of(new SimpleGrantedAuthority(ROLE)));
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
+                touchLastUsed(candidate);
                 return;
             }
+        }
+    }
+
+    /** Met à jour last_used_at (best-effort : ne doit jamais faire échouer la requête). */
+    private void touchLastUsed(ApiKey key) {
+        try {
+            key.setLastUsedAt(Instant.now());
+            apiKeys.save(key);
+        } catch (RuntimeException ex) {
+            log.debug("Échec maj last_used_at pour la clé {} : {}", key.getKeyPrefix(), ex.toString());
         }
     }
 }

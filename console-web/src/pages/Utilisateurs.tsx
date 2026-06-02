@@ -19,15 +19,13 @@ function formatTimestamp(ms: number | null): string {
 type ModalKind =
   | { kind: 'none' }
   | { kind: 'create' }
-  | { kind: 'edit'; userId: string }
-  | { kind: 'password'; userId: string; username: string }
+  | { kind: 'edit'; userId: number }
+  | { kind: 'password'; userId: number; email: string }
   | { kind: 'disable'; user: UserRow };
 
 /**
- * Each scoped role maps to exactly one geo level. Picking one disables the
- * others — see RoleAndScopePicker. The hub never combines two scoped roles
- * on the same account; the unscoped roles (admin / national / etc.) can be
- * combined freely.
+ * Chaque rôle zone-bound impose un niveau de portée géographique. Les autres
+ * rôles sont nationaux (pas de scope). En v2.0 un compte porte un seul rôle.
  */
 const SCOPED_ROLES: Record<string, 'region' | 'district' | 'site'> = {
   REGIONAL_COORD: 'region',
@@ -62,8 +60,8 @@ export function Utilisateurs() {
     queryFn: () => fetchUsers({ q: query, page, size }),
   });
 
-  // Resolve region/district names for the Zone column. We fetch all districts
-  // (no regionId filter) once — there are ~100 nationally so this is cheap.
+  // Résout les noms région/district pour la colonne Zone. ~100 districts au
+  // niveau national, donc le fetch global est peu coûteux.
   const regionsQ = useQuery({ queryKey: ['regions'], queryFn: () => fetchRegions() });
   const districtsQ = useQuery({ queryKey: ['districts', null], queryFn: () => fetchDistricts() });
 
@@ -83,7 +81,7 @@ export function Utilisateurs() {
         icon={ShieldCheck}
         tone="admin"
         title="Utilisateurs"
-        subtitle={users.data ? `${formatInt(users.data.total)} comptes Keycloak` : 'Chargement…'}
+        subtitle={users.data ? `${formatInt(users.data.total)} comptes` : 'Chargement…'}
         right={<>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-subtle pointer-events-none" />
@@ -109,12 +107,12 @@ export function Utilisateurs() {
         <table className="w-full text-sm">
           <thead className="thead-sigdep text-left">
             <tr className="text-left">
-              <th className="px-4 py-2 font-medium">Identifiant</th>
-              <th className="px-4 py-2 font-medium">Nom complet</th>
               <th className="px-4 py-2 font-medium">Email</th>
+              <th className="px-4 py-2 font-medium">Nom complet</th>
+              <th className="px-4 py-2 font-medium">Rôle</th>
               <th className="px-4 py-2 font-medium">Zone</th>
               <th className="px-4 py-2 font-medium">Statut</th>
-              <th className="px-4 py-2 font-medium">Créé le</th>
+              <th className="px-4 py-2 font-medium">Dernière connexion</th>
               <th className="px-4 py-2 font-medium text-right">Actions</th>
             </tr>
           </thead>
@@ -124,24 +122,22 @@ export function Utilisateurs() {
           <tbody className="divide-y divide-slate-100">
             {users.isError ? (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-rose-600">
-                Erreur de chargement — vérifie que le client <code>sigdep-console-admin</code> est bien configuré.
+                Erreur de chargement des utilisateurs.
               </td></tr>
             ) : users.data?.content.length === 0 ? (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-muted">Aucun utilisateur</td></tr>
             ) : users.data?.content.map(u => (
               <tr key={u.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2 font-mono text-xs">{u.username}</td>
-                <td className="px-4 py-2">
-                  {[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}
-                </td>
-                <td className="px-4 py-2 text-ink-muted">{u.email ?? '—'}</td>
+                <td className="px-4 py-2 font-mono text-xs">{u.email}</td>
+                <td className="px-4 py-2">{u.displayName || '—'}</td>
+                <td className="px-4 py-2 font-mono text-xs">{u.role}</td>
                 <td className="px-4 py-2 text-ink-muted text-xs">{scopeLabel(u, idx)}</td>
                 <td className="px-4 py-2">
-                  {u.enabled
+                  {u.active
                     ? <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">Actif</span>
                     : <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-500">Désactivé</span>}
                 </td>
-                <td className="px-4 py-2 text-ink-muted">{formatTimestamp(u.createdAt)}</td>
+                <td className="px-4 py-2 text-ink-muted">{formatTimestamp(u.lastLoginAt)}</td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
                   <button
                     onClick={() => setModal({ kind: 'edit', userId: u.id })}
@@ -149,11 +145,11 @@ export function Utilisateurs() {
                     Éditer
                   </button>
                   <button
-                    onClick={() => setModal({ kind: 'password', userId: u.id, username: u.username })}
+                    onClick={() => setModal({ kind: 'password', userId: u.id, email: u.email })}
                     className="text-sigdep-700 hover:underline text-xs mr-3">
                     Mot de passe
                   </button>
-                  {u.enabled ? (
+                  {u.active ? (
                     <button
                       onClick={() => setModal({ kind: 'disable', user: u })}
                       className="text-rose-600 hover:underline text-xs">
@@ -204,7 +200,7 @@ export function Utilisateurs() {
                    onDone={() => { refresh(); setModal({ kind: 'none' }); }} />
       )}
       {modal.kind === 'password' && (
-        <PasswordModal userId={modal.userId} username={modal.username}
+        <PasswordModal userId={modal.userId} email={modal.email}
                        onClose={() => setModal({ kind: 'none' })} />
       )}
       {modal.kind === 'disable' && (
@@ -248,81 +244,53 @@ function Field({ label, children }: Readonly<{ label: string; children: React.Re
 const inputClass =
   'w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-sigdep-500 focus:ring-1 focus:ring-sigdep-500';
 
+type ScopeState = {
+  regionId: number | null;
+  districtId: number | null;
+  siteId: number | null;
+};
+
 /**
- * Roles checklist + the cascading region/district/site select that pops up
- * once a scoped role is checked. Enforces "at most one scoped role" by
- * disabling the other two whenever one is active.
+ * Sélecteur rôle unique + portée géographique en cascade qui apparaît quand le
+ * rôle choisi est zone-bound (REGIONAL_COORD / DISTRICT_COORD / SITE_USER).
  */
 function RoleAndScopePicker({
-  roles, value, onChange,
-  scopeRegion, scopeDistrict, scopeSite,
-  onScopeChange,
+  roles, role, onRoleChange, scope, onScopeChange,
 }: Readonly<{
   roles: string[];
-  value: string[];
-  onChange: (next: string[]) => void;
-  scopeRegion: number | null;
-  scopeDistrict: number | null;
-  scopeSite: number | null;
-  onScopeChange: (region: number | null, district: number | null, site: number | null) => void;
+  role: string;
+  onRoleChange: (role: string) => void;
+  scope: ScopeState;
+  onScopeChange: (next: ScopeState) => void;
 }>) {
-  const set = new Set(value);
-  // Determine the active scoped role (if any).
-  let activeScoped: 'region' | 'district' | 'site' | null = null;
-  for (const r of value) {
-    const s = SCOPED_ROLES[r];
-    if (s) { activeScoped = s; break; }
-  }
+  const activeScoped = SCOPED_ROLES[role] ?? null;
 
   const regions = useQuery({ queryKey: ['regions'], queryFn: () => fetchRegions() });
   const districts = useQuery({
-    queryKey: ['districts', scopeRegion],
-    queryFn: () => fetchDistricts(scopeRegion ?? undefined),
-    enabled: scopeRegion != null,
+    queryKey: ['districts', scope.regionId],
+    queryFn: () => fetchDistricts(scope.regionId ?? undefined),
+    enabled: scope.regionId != null,
   });
   const sites = useQuery({
-    queryKey: ['sitesOf', scopeRegion, scopeDistrict],
-    queryFn: () => fetchSitesOf(scopeRegion ?? undefined, scopeDistrict ?? undefined),
-    enabled: scopeRegion != null || scopeDistrict != null,
+    queryKey: ['sitesOf', scope.regionId, scope.districtId],
+    queryFn: () => fetchSitesOf(scope.regionId ?? undefined, scope.districtId ?? undefined),
+    enabled: scope.regionId != null || scope.districtId != null,
   });
-
-  function toggleRole(role: string) {
-    const next = new Set(set);
-    if (next.has(role)) {
-      next.delete(role);
-      // If we just removed the scoped role, clear the scope.
-      if (SCOPED_ROLES[role]) onScopeChange(null, null, null);
-    } else {
-      // If activating a scoped role, drop any other scoped role first.
-      if (SCOPED_ROLES[role]) {
-        for (const other of Object.keys(SCOPED_ROLES)) {
-          if (other !== role) next.delete(other);
-        }
-      }
-      next.add(role);
-    }
-    onChange(Array.from(next).sort());
-  }
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-1 max-h-44 overflow-auto border border-slate-200 rounded-md p-2">
-        {roles.length === 0 && <span className="text-xs text-ink-muted col-span-2">Aucun rôle disponible</span>}
-        {roles.map(r => {
-          const checked = set.has(r);
-          const scoped = SCOPED_ROLES[r];
-          // Disable the other two scoped roles when one is already chosen.
-          const disabled = scoped != null && activeScoped != null && activeScoped !== scoped && !checked;
-          return (
-            <label key={r}
-                   className={`flex items-center gap-2 text-xs ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
-              <input type="checkbox" checked={checked} disabled={disabled}
-                     onChange={() => toggleRole(r)} />
-              <span className="font-mono">{r}</span>
-            </label>
-          );
-        })}
-      </div>
+      <Field label="Rôle">
+        <select className={inputClass} value={role}
+                onChange={e => {
+                  const next = e.target.value;
+                  onRoleChange(next);
+                  // Changer de rôle réinitialise la portée.
+                  onScopeChange({ regionId: null, districtId: null, siteId: null });
+                }}>
+          <option value="">— Choisir un rôle —</option>
+          {roles.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </Field>
 
       {activeScoped && (
         <div className="rounded-md border border-sigdep-200 bg-sigdep-50/40 p-3 space-y-2">
@@ -332,10 +300,10 @@ function RoleAndScopePicker({
 
           <Field label="Région">
             <select className={inputClass}
-                    value={scopeRegion ?? ''}
+                    value={scope.regionId ?? ''}
                     onChange={e => {
                       const v = e.target.value ? Number(e.target.value) : null;
-                      onScopeChange(v, null, null);
+                      onScopeChange({ regionId: v, districtId: null, siteId: null });
                     }}>
               <option value="">— Choisir —</option>
               {regions.data?.map(r => (
@@ -347,13 +315,13 @@ function RoleAndScopePicker({
           {(activeScoped === 'district' || activeScoped === 'site') && (
             <Field label="District">
               <select className={inputClass}
-                      value={scopeDistrict ?? ''}
-                      disabled={scopeRegion == null}
+                      value={scope.districtId ?? ''}
+                      disabled={scope.regionId == null}
                       onChange={e => {
                         const v = e.target.value ? Number(e.target.value) : null;
-                        onScopeChange(scopeRegion, v, null);
+                        onScopeChange({ regionId: scope.regionId, districtId: v, siteId: null });
                       }}>
-                <option value="">{scopeRegion == null ? 'Choisis d\'abord une région' : '— Choisir —'}</option>
+                <option value="">{scope.regionId == null ? 'Choisis d\'abord une région' : '— Choisir —'}</option>
                 {districts.data?.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
@@ -364,13 +332,13 @@ function RoleAndScopePicker({
           {activeScoped === 'site' && (
             <Field label="Site">
               <select className={inputClass}
-                      value={scopeSite ?? ''}
-                      disabled={scopeDistrict == null}
+                      value={scope.siteId ?? ''}
+                      disabled={scope.districtId == null}
                       onChange={e => {
                         const v = e.target.value ? Number(e.target.value) : null;
-                        onScopeChange(scopeRegion, scopeDistrict, v);
+                        onScopeChange({ regionId: scope.regionId, districtId: scope.districtId, siteId: v });
                       }}>
-                <option value="">{scopeDistrict == null ? 'Choisis d\'abord un district' : '— Choisir —'}</option>
+                <option value="">{scope.districtId == null ? 'Choisis d\'abord un district' : '— Choisir —'}</option>
                 {sites.data?.map(s => (
                   <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
                 ))}
@@ -383,36 +351,32 @@ function RoleAndScopePicker({
   );
 }
 
-function scopeIsValid(roles: string[],
-                      regionId: number | null,
-                      districtId: number | null,
-                      siteId: number | null): boolean {
-  let activeScoped: 'region' | 'district' | 'site' | null = null;
-  for (const r of roles) {
-    const s = SCOPED_ROLES[r];
-    if (s) { activeScoped = s; break; }
-  }
-  if (activeScoped === 'region')   return regionId != null;
-  if (activeScoped === 'district') return regionId != null && districtId != null;
-  if (activeScoped === 'site')     return regionId != null && districtId != null && siteId != null;
-  return true;
+function scopeIsValid(role: string, scope: ScopeState): boolean {
+  const activeScoped = SCOPED_ROLES[role] ?? null;
+  if (activeScoped === 'region')   return scope.regionId != null;
+  if (activeScoped === 'district') return scope.regionId != null && scope.districtId != null;
+  if (activeScoped === 'site')     return scope.regionId != null && scope.districtId != null && scope.siteId != null;
+  return role !== '';
 }
 
 function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone: () => void }>) {
   const [form, setForm] = useState<CreateUserRequest>({
-    username: '', email: '', firstName: '', lastName: '',
-    enabled: true, emailVerified: false,
-    password: '', passwordTemporary: true, realmRoles: [],
+    email: '', displayName: '', role: '',
+    active: true, password: '', passwordTemporary: true,
     regionId: null, districtId: null, siteId: null,
   });
   const [confirmPassword, setConfirmPassword] = useState('');
   const roles = useQuery({ queryKey: ['user-roles'], queryFn: fetchUserRoles });
   const m = useMutation({ mutationFn: () => createUser(form), onSuccess: onDone });
 
-  const passwordOk = !form.password || form.password === confirmPassword;
-  const scopeOk = scopeIsValid(form.realmRoles ?? [],
-      form.regionId ?? null, form.districtId ?? null, form.siteId ?? null);
-  const canSubmit = !!form.username && passwordOk && scopeOk && !m.isPending;
+  const scope: ScopeState = {
+    regionId: form.regionId ?? null,
+    districtId: form.districtId ?? null,
+    siteId: form.siteId ?? null,
+  };
+  const passwordOk = !!form.password && form.password === confirmPassword;
+  const scopeOk = scopeIsValid(form.role, scope);
+  const canSubmit = !!form.email && !!form.role && passwordOk && scopeOk && !m.isPending;
 
   return (
     <ModalShell title="Nouvel utilisateur" onClose={onClose}
@@ -425,23 +389,13 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
           {m.isPending ? 'Création…' : 'Créer'}
         </button>
       </>}>
-      <Field label="Identifiant (username)">
-        <input className={inputClass} value={form.username}
-               onChange={e => setForm({ ...form, username: e.target.value })} />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Prénom">
-          <input className={inputClass} value={form.firstName ?? ''}
-                 onChange={e => setForm({ ...form, firstName: e.target.value })} />
-        </Field>
-        <Field label="Nom">
-          <input className={inputClass} value={form.lastName ?? ''}
-                 onChange={e => setForm({ ...form, lastName: e.target.value })} />
-        </Field>
-      </div>
-      <Field label="Email">
-        <input className={inputClass} type="email" value={form.email ?? ''}
+      <Field label="Adresse e-mail (identifiant de connexion)">
+        <input className={inputClass} type="email" value={form.email}
                onChange={e => setForm({ ...form, email: e.target.value })} />
+      </Field>
+      <Field label="Nom complet">
+        <input className={inputClass} value={form.displayName ?? ''}
+               onChange={e => setForm({ ...form, displayName: e.target.value })} />
       </Field>
       <Field label="Mot de passe initial">
         <input className={inputClass} type="text" value={form.password ?? ''}
@@ -459,18 +413,14 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
                onChange={e => setForm({ ...form, passwordTemporary: e.target.checked })} />
         Mot de passe temporaire (l'utilisateur devra le changer)
       </label>
-      <Field label="Rôles realm">
-        <RoleAndScopePicker
-          roles={roles.data ?? []}
-          value={form.realmRoles ?? []}
-          onChange={next => setForm({ ...form, realmRoles: next })}
-          scopeRegion={form.regionId ?? null}
-          scopeDistrict={form.districtId ?? null}
-          scopeSite={form.siteId ?? null}
-          onScopeChange={(r, d, s) => setForm({ ...form, regionId: r, districtId: d, siteId: s })}
-        />
-      </Field>
-      {!scopeOk && (
+      <RoleAndScopePicker
+        roles={roles.data ?? []}
+        role={form.role}
+        onRoleChange={role => setForm({ ...form, role })}
+        scope={scope}
+        onScopeChange={s => setForm({ ...form, regionId: s.regionId, districtId: s.districtId, siteId: s.siteId })}
+      />
+      {form.role !== '' && !scopeOk && (
         <p className="text-rose-600 text-xs">Sélectionne la zone correspondant au rôle géographique.</p>
       )}
       {m.isError && <p className="text-rose-600 text-xs">{(m.error as Error).message}</p>}
@@ -479,7 +429,7 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
 }
 
 function EditModal({ userId, onClose, onDone }:
-    Readonly<{ userId: string; onClose: () => void; onDone: () => void }>) {
+    Readonly<{ userId: number; onClose: () => void; onDone: () => void }>) {
   const detail = useQuery({ queryKey: ['user', userId], queryFn: () => fetchUser(userId) });
   const roles = useQuery({ queryKey: ['user-roles'], queryFn: fetchUserRoles });
   const [form, setForm] = useState<UpdateUserRequest | null>(null);
@@ -488,29 +438,29 @@ function EditModal({ userId, onClose, onDone }:
     onSuccess: onDone,
   });
 
-  // Initialise form once detail loads.
+  // Initialise le formulaire une fois le détail chargé.
   if (detail.data && form === null) {
     const d = detail.data as UserDetail;
     setForm({
-      email: d.email ?? '',
-      firstName: d.firstName ?? '',
-      lastName: d.lastName ?? '',
-      enabled: d.enabled,
-      emailVerified: d.emailVerified,
-      realmRoles: d.realmRoles ?? [],
+      displayName: d.displayName ?? '',
+      role: d.role,
+      active: d.active,
       regionId: d.regionId ?? null,
       districtId: d.districtId ?? null,
       siteId: d.siteId ?? null,
     });
   }
 
-  const scopeOk = form == null || scopeIsValid(
-      form.realmRoles ?? [],
-      form.regionId ?? null, form.districtId ?? null, form.siteId ?? null);
-  const canSubmit = form != null && scopeOk && !m.isPending;
+  const scope: ScopeState = {
+    regionId: form?.regionId ?? null,
+    districtId: form?.districtId ?? null,
+    siteId: form?.siteId ?? null,
+  };
+  const scopeOk = form == null || scopeIsValid(form.role ?? '', scope);
+  const canSubmit = form != null && !!form.role && scopeOk && !m.isPending;
 
   return (
-    <ModalShell title={`Édition — ${detail.data?.username ?? '…'}`} onClose={onClose}
+    <ModalShell title={`Édition — ${detail.data?.email ?? '…'}`} onClose={onClose}
       footer={<>
         <button onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded">Annuler</button>
         <button
@@ -524,41 +474,22 @@ function EditModal({ userId, onClose, onDone }:
         <p className="text-ink-muted">Chargement…</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Prénom">
-              <input className={inputClass} value={form.firstName ?? ''}
-                     onChange={e => setForm({ ...form, firstName: e.target.value })} />
-            </Field>
-            <Field label="Nom">
-              <input className={inputClass} value={form.lastName ?? ''}
-                     onChange={e => setForm({ ...form, lastName: e.target.value })} />
-            </Field>
-          </div>
-          <Field label="Email">
-            <input className={inputClass} type="email" value={form.email ?? ''}
-                   onChange={e => setForm({ ...form, email: e.target.value })} />
+          <Field label="Nom complet">
+            <input className={inputClass} value={form.displayName ?? ''}
+                   onChange={e => setForm({ ...form, displayName: e.target.value })} />
           </Field>
           <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={form.emailVerified ?? false}
-                   onChange={e => setForm({ ...form, emailVerified: e.target.checked })} />
-            Email vérifié
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={form.enabled ?? true}
-                   onChange={e => setForm({ ...form, enabled: e.target.checked })} />
+            <input type="checkbox" checked={form.active ?? true}
+                   onChange={e => setForm({ ...form, active: e.target.checked })} />
             Compte actif
           </label>
-          <Field label="Rôles realm">
-            <RoleAndScopePicker
-              roles={roles.data ?? []}
-              value={form.realmRoles ?? []}
-              onChange={next => setForm({ ...form, realmRoles: next })}
-              scopeRegion={form.regionId ?? null}
-              scopeDistrict={form.districtId ?? null}
-              scopeSite={form.siteId ?? null}
-              onScopeChange={(r, d, s) => setForm({ ...form, regionId: r, districtId: d, siteId: s })}
-            />
-          </Field>
+          <RoleAndScopePicker
+            roles={roles.data ?? []}
+            role={form.role ?? ''}
+            onRoleChange={role => setForm({ ...form, role })}
+            scope={scope}
+            onScopeChange={s => setForm({ ...form, regionId: s.regionId, districtId: s.districtId, siteId: s.siteId })}
+          />
           {!scopeOk && (
             <p className="text-rose-600 text-xs">Sélectionne la zone correspondant au rôle géographique.</p>
           )}
@@ -569,8 +500,8 @@ function EditModal({ userId, onClose, onDone }:
   );
 }
 
-function PasswordModal({ userId, username, onClose }:
-    Readonly<{ userId: string; username: string; onClose: () => void }>) {
+function PasswordModal({ userId, email, onClose }:
+    Readonly<{ userId: number; email: string; onClose: () => void }>) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [temporary, setTemporary] = useState(true);
@@ -578,9 +509,9 @@ function PasswordModal({ userId, username, onClose }:
     mutationFn: () => resetUserPassword(userId, password, temporary),
     onSuccess: onClose,
   });
-  const passwordOk = password && password === confirm;
+  const passwordOk = !!password && password === confirm;
   return (
-    <ModalShell title={`Mot de passe — ${username}`} onClose={onClose}
+    <ModalShell title={`Mot de passe — ${email}`} onClose={onClose}
       footer={<>
         <button onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded">Annuler</button>
         <button
@@ -629,7 +560,7 @@ function DisableModal({ user, onClose, onDone }:
         </button>
       </>}>
       <p>
-        Confirmer la désactivation du compte <span className="font-mono">{user.username}</span> ?
+        Confirmer la désactivation du compte <span className="font-mono">{user.email}</span> ?
       </p>
       <p className="text-xs text-ink-muted">
         Le compte ne pourra plus se connecter mais ses données restent en place.
