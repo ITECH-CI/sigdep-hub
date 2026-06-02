@@ -9,7 +9,8 @@ régulièrement que la synchronisation tourne.
 Même procédure que pour un coordinateur :
 
 1. Ouvrez l'URL fournie par votre administrateur.
-2. Cliquez sur **Se connecter** puis saisissez vos identifiants Keycloak.
+2. Cliquez sur **Se connecter** puis saisissez votre adresse e-mail et
+   votre mot de passe.
 3. Vous arrivez sur la **Vue d'ensemble** restreinte à votre site.
 
 ## 2. Votre périmètre

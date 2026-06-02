@@ -1088,7 +1088,7 @@ export async function downloadIvsaCsv(months: number, scope: GeoScopeQ): Promise
   await downloadCsv(`/api/v1/clinic/ivsa/visits.csv?${params}`, `ivsa-${months}m.csv`);
 }
 
-// --- Users (Keycloak admin) ------------------------------------------------
+// --- Users (gestion des comptes, auth v2.0) --------------------------------
 
 async function send<T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T | null> {
   const headers: Record<string, string> = {};

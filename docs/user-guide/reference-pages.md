@@ -144,7 +144,7 @@ par patient cliquable.
 ### `/app/users` — Utilisateurs
 
 Réservé `SUPER_ADMIN` et `IT_ADMIN`. Permet de créer, désactiver,
-modifier les utilisateurs Keycloak et leurs rôles / périmètres.
+modifier les comptes utilisateurs et leur rôle / périmètre.
 
 Voir [admin/gestion-utilisateurs.md](admin/gestion-utilisateurs.md).
 

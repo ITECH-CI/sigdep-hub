@@ -15,7 +15,7 @@ sigdep-hub/
 ├── ingestion-api/   ← Spring Boot app, port 8090. WRITES to PostgreSQL.
 ├── console-api/     ← Spring Boot app, port 8041. READS from PostgreSQL.
 ├── console-web/     ← React + Vite SPA, port 5173 in dev, bundled in prod.
-└── infra/           ← docker-compose, nginx config, Keycloak realm.
+└── infra/           ← docker-compose, nginx config.
 ```
 
 `core-domain` is a plain Java library — no `main()`, no controller. Both
@@ -29,16 +29,13 @@ The console runs with `spring.liquibase.enabled=false`.
 ## Runtime topology
 
 In both dev and prod, all browser traffic goes through a single nginx
-origin. This eliminates an entire class of OIDC / CORS issues that come up
-when the SPA, the API and the IdP are on different ports.
+origin. This keeps CORS trivial (SPA and API share one origin).
 
 ```
                               ┌─────────── localhost:9000 (nginx) ──────────┐
                               │                                              │
-                              │   /realms/* ──────────►  Keycloak (:8080)    │
-                              │   /resources/*, /admin/*, /js/*              │
-                              │                                              │
                               │   /api/* ─────────────►  console-api (:8041) │
+                              │   /api/auth/*  (login, refresh, me, logout)  │
                               │   /actuator/*                                │
                               │                                              │
    browser ────────────────►  │   /api/v1/sync/* (prod) ►  ingestion-api     │
@@ -49,16 +46,15 @@ when the SPA, the API and the IdP are on different ports.
                               │                            SPA assets (prod) │
                               └──────────────────────────────────────────────┘
 
-   sigdep-sync (per site) ──── HTTPS, JWT auth ──►  ingestion-api directly
-                                                   (often bypassing nginx
-                                                    in tightly controlled
-                                                    private networks)
+   sigdep-sync (per site) ──── HTTPS, X-API-Key ──►  ingestion-api directly
+                                                    (often bypassing nginx
+                                                     in tightly controlled
+                                                     private networks)
 ```
 
-Keycloak is configured with `KC_HOSTNAME=http://localhost:9000` and
-`KC_PROXY_HEADERS=xforwarded` so it generates callback URLs against the
-nginx-fronted origin and trusts `X-Forwarded-*` from nginx. In production
-the same idea applies, swapping the URL for the public TLS hostname.
+Auth v2.0 : l'authentification est intégrée à `console-api` (Spring
+Security + JWT HS256). Plus de serveur d'identité séparé ; nginx ne
+route que les apps. En prod, même topologie avec l'URL publique TLS.
 
 ## Data model (high-level)
 
@@ -87,19 +83,22 @@ keep the rest in `extra_data` for ad-hoc queries.
 
 ## Authentication
 
-The realm is `sigdep` (Keycloak 25). Three OIDC clients:
+Auth v2.0 — Spring Security pur, intégré à `console-api` (plus de
+Keycloak). Deux mécanismes :
 
-| Client                  | Type           | Used by                          |
-| ----------------------- | -------------- | -------------------------------- |
-| `sigdep-console`        | public, PKCE   | The React SPA                    |
-| `sigdep-console-admin`  | confidential   | console-api (admin REST client)  |
-| `sigdep-agent`          | confidential   | sigdep-sync edge agents          |
+- **Utilisateurs (console)** : login email/mot de passe sur
+  `POST /api/auth/login` → access token **JWT HS256** (TTL 1h) +
+  refresh token opaque (TTL 7j, stocké en `auth.refresh_tokens`,
+  rotation à chaque refresh). Le SPA garde les deux en localStorage et
+  envoie `Authorization: Bearer …` sur chaque appel ; un `JwtAuthFilter`
+  valide la signature et reconstruit le principal (`AuthenticatedUser`)
+  depuis les claims (`sub`, `uid`, `role`, `regionId`/`districtId`/`siteId`).
+- **Agents (ingestion)** : clé API opaque par site dans l'en-tête
+  `X-API-Key`, vérifiée par BCrypt contre `auth.api_keys`
+  (`ApiKeyAuthFilter`).
 
-The SPA uses the standard auth-code-with-PKCE flow. Tokens land in the
-browser's localStorage; the SPA sends the access token as `Authorization:
-Bearer …` on every API call. The Spring resource server validates the JWT
-signature against the realm JWKS, checks the issuer
-(`KEYCLOAK_ISSUER_URI`) and extracts roles from `realm_access.roles`.
+Les mots de passe sont hachés en BCrypt (`auth.users`). Le secret de
+signature est fourni via `SIGDEP_JWT_SECRET` (≥ 32 octets).
 
 ### Roles
 
@@ -116,10 +115,10 @@ signature against the realm JWKS, checks the issuer
 
 ### Geographic scoping (`AuthScope`)
 
-A `REGIONAL_COORD` / `DISTRICT_COORD` / `SITE_USER` has a `regionId` /
-`districtId` / `siteId` user attribute in Keycloak. The realm declares a
-protocol mapper that projects these attributes into the access token
-claims of the same name.
+A `REGIONAL_COORD` / `DISTRICT_COORD` / `SITE_USER` has a row in
+`auth.user_geo_scope` carrying one of `regionId` / `districtId` /
+`siteId`. `JwtService` projects that scope into the access token claims
+of the same name at login time.
 
 Every controller request goes through
 `AuthScope.effective(uiRegion, uiDistrict, uiSite)` before reaching the
@@ -214,8 +213,9 @@ Key conventions:
 ## Pieces that are intentionally *not* here
 
 - **No write API from the console.** The console is read-only on
-  business data; the only writes happen via the Users page (Keycloak
-  admin REST API) and the ingestion-api (agents).
+  business data; the only writes happen via the Users / Sites admin
+  pages (accounts + API keys in the `auth` schema) and the
+  ingestion-api (agents).
 - **No background jobs / schedulers.** Indicators are computed on demand
   per-request. If we need scheduled materialisation, it will live behind
   a clear interface (Spring `@Scheduled` in a dedicated module).

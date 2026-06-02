@@ -110,14 +110,15 @@ l'agent, le hub et la console (`PatientDto`, `VisitDto`, etc.).
 admission). Porte des `obs` (observations).
 
 **Hub (sigdep-hub)** — serveur central : PostgreSQL + ingestion-api
++ console-api + console-web.
 
-- console-api + Keycloak.
+**API key (clé API)** — jeton opaque (UUID) propre à un site, utilisé
+par l'agent sigdep-sync pour s'authentifier auprès du hub (en-tête
+`X-API-Key`). Généré et révocable depuis la page Sites.
 
-**JWT** — JSON Web Token. Jeton signé délivré par Keycloak après
-authentification. Contient le rôle et le périmètre de l'utilisateur.
-
-**Keycloak** — serveur d'authentification (Single Sign-On). Gère les
-utilisateurs et les jetons d'accès du hub.
+**JWT** — JSON Web Token. Jeton d'accès signé (HS256) délivré par
+console-api après authentification. Contient l'identité, le rôle et le
+périmètre de l'utilisateur.
 
 **Liquibase** — outil de migration de schéma SQL. Les migrations
 sont versionnées dans
@@ -127,21 +128,19 @@ sont versionnées dans
 (valeur + concept + encounter). La fiche de suivi capture des
 dizaines d'obs par visite.
 
-**OIDC / OAuth2** — protocoles d'authentification utilisés entre
-Keycloak, la console et les agents.
-
 **Outbox** — file SQLite locale de l'agent qui garde les records à
 envoyer. Permet de fonctionner hors-ligne et de rejouer les rejets.
 
-**Realm (Keycloak)** — espace logique d'authentification. SIGDEP-3
-utilise un seul realm appelé `sigdep`.
+**Refresh token** — jeton opaque (UUID) à durée de vie longue (7j),
+stocké en base, échangé contre un nouvel access token JWT quand celui-ci
+expire. Renouvelé (rotation) à chaque rafraîchissement.
 
 **Source UUID** — identifiant OpenMRS d'un enregistrement (patient,
 visite, etc.). Conservé dans le hub pour permettre l'upsert
 idempotent.
 
 **Scope (AuthScope)** — périmètre effectif du JWT. Combinaison du
-rôle Keycloak et d'attributs (`regionId`, `districtId`, `siteId`).
+rôle et des claims de portée (`regionId`, `districtId`, `siteId`).
 Appliqué partout dans la console.
 
 **Upsert** — INSERT ou UPDATE selon que la clé existe déjà.
@@ -165,7 +164,7 @@ IVSA, Clôtures).
 
 **Synchronisation** — page admin (Batches reçus + Rejets).
 
-**Utilisateurs** — page admin pour gérer les comptes Keycloak.
+**Utilisateurs** — page admin pour gérer les comptes utilisateurs.
 
 ## Acronymes courts
 

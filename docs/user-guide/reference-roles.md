@@ -1,8 +1,8 @@
 # Référence — Rôles et périmètres
 
-SIGDEP-3 utilise **8 rôles** Keycloak qui contrôlent à la fois **ce que
-vous pouvez voir** (périmètre géographique) et **ce que vous pouvez
-faire** (lecture seule, administration, etc.).
+SIGDEP-3 utilise **8 rôles** qui contrôlent à la fois **ce que vous
+pouvez voir** (périmètre géographique) et **ce que vous pouvez faire**
+(lecture seule, administration, etc.). Chaque compte porte un seul rôle.
 
 ## Vue d'ensemble des rôles
 
@@ -98,8 +98,6 @@ Exemples :
 - Profil pour les auditeurs internes ou externes.
 
 ## Comment un rôle est-il attribué ?
-
-Côté Keycloak :
 
 1. L'administrateur (`SUPER_ADMIN` ou `IT_ADMIN`) ouvre la page
    **Utilisateurs** de la console.
