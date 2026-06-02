@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "react-oidc-context";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity, BarChart3, BookOpenCheck, Building2, ChevronLeft, ChevronRight,
   LayoutDashboard, LogOut, Menu, Microscope, Pill, RefreshCcw,
   ShieldCheck, Stethoscope, Syringe, Users, type LucideIcon,
 } from "lucide-react";
-import { getAccessToken } from "../auth";
+import { useAuth } from "../auth";
 import { GlobalLoader } from "./GlobalLoader";
 
 type NavItem = {
@@ -59,28 +58,6 @@ const NAV: NavGroup[] = [
   },
 ];
 
-/**
- * Realm roles live in the *access* token's `realm_access.roles` claim — the
- * ID token (= `user.profile`) doesn't carry them by default in Keycloak. We
- * therefore decode the access token here rather than read the OIDC profile.
- */
-function realmRolesFromAccessToken(): Set<string> {
-  const token = getAccessToken();
-  if (!token) return new Set();
-  const parts = token.split(".");
-  if (parts.length < 2) return new Set();
-  try {
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const pad = b64.length % 4 === 0 ? b64 : b64 + "=".repeat(4 - (b64.length % 4));
-    const payload = JSON.parse(atob(pad)) as { realm_access?: { roles?: unknown } };
-    const roles = payload.realm_access?.roles;
-    if (!Array.isArray(roles)) return new Set();
-    return new Set(roles.filter((r): r is string => typeof r === "string"));
-  } catch {
-    return new Set();
-  }
-}
-
 function initials(name: string | undefined): string {
   if (!name) return "·";
   const parts = name.trim().split(/\s+/);
@@ -90,14 +67,16 @@ function initials(name: string | undefined): string {
 const COLLAPSE_KEY = "sigdep:sidebarCollapsed";
 
 export function AppLayout() {
-  const auth = useAuth();
-  const profile = auth.user?.profile;
-  const displayName =
-    profile?.name ??
-    [profile?.given_name, profile?.family_name].filter(Boolean).join(" ") ??
-    profile?.preferred_username ??
-    "—";
-  const roles = realmRolesFromAccessToken();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const displayName = user?.displayName ?? "—";
+  // En v2.0 chaque compte porte un seul rôle (claim `role` du JWT).
+  const roles = new Set(user?.role ? [user.role] : []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
 
   // Persist the collapse preference; auto-collapse on narrow viewports.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -187,7 +166,7 @@ export function AppLayout() {
               {initials(displayName)}
             </div>
             <button
-              onClick={() => auth.signoutRedirect()}
+              onClick={handleLogout}
               title="Déconnexion"
               className="p-1.5 rounded-md hover:bg-slate-100 text-ink-muted hover:text-rose-600 transition"
             >

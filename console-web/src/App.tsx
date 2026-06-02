@@ -3,6 +3,7 @@ import { RequireAuth } from "./auth";
 import { AppLayout } from "./components/AppLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { Landing } from "./pages/Landing";
+import { Login } from "./pages/Login";
 import { PatientDetail } from "./pages/PatientDetail";
 import { Patients } from "./pages/Patients";
 import { Sites } from "./pages/Sites";
@@ -22,6 +23,7 @@ export function App() {
       {/* Public */}
       <Route path="/" element={<Landing />} />
       <Route path="/public" element={<Landing />} />
+      <Route path="/login" element={<Login />} />
 
       {/* Authenticated app — /app/* */}
       <Route

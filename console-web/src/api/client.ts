@@ -1,19 +1,82 @@
-import { getAccessToken } from '../auth';
+import {
+  getAccessToken,
+  getRefreshToken,
+  storeTokens,
+  clearTokens,
+} from '../auth';
 
 /**
  * Tiny fetch wrapper. The Vite dev server proxies /api/** to the console-api
  * (see vite.config.ts), so a relative URL works in dev and in prod.
  *
- * Public endpoints (/api/v1/public/**) are called without a token; for every
- * other path we attach the bearer token from the OIDC user store.
+ * Public endpoints (/api/v1/public/**) are called without a token. For every
+ * other path we attach the bearer JWT (auth v2.0). On a 401 we attempt a
+ * single silent refresh and replay the request; if the refresh fails we clear
+ * the session and signal a forced logout so the app bounces to /login.
  */
-async function get<T>(path: string): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (!path.startsWith('/api/v1/public/')) {
-    const token = getAccessToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Échange le refresh token contre une nouvelle paire ; true si réussi. */
+async function tryRefresh(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+  // Dédoublonne les refresh concurrents (plusieurs 401 en parallèle).
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const r = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!r.ok) return false;
+        const t = (await r.json()) as { accessToken: string; refreshToken: string };
+        storeTokens(t.accessToken, t.refreshToken);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
   }
-  const r = await fetch(path, { headers });
+  return refreshInFlight;
+}
+
+function forceLogout(): void {
+  clearTokens();
+  window.dispatchEvent(new Event('sigdep:logout'));
+}
+
+/**
+ * fetch authentifié avec gestion du 401 (refresh + replay). Les endpoints
+ * publics passent sans token et sans interception.
+ */
+async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const isPublic = path.startsWith('/api/v1/public/');
+  const withAuth = (token: string | undefined): RequestInit => ({
+    ...init,
+    headers: {
+      ...(init.headers as Record<string, string> | undefined),
+      ...(token && !isPublic ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  let r = await fetch(path, withAuth(getAccessToken()));
+  if (r.status === 401 && !isPublic) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      r = await fetch(path, withAuth(getAccessToken()));
+    } else {
+      forceLogout();
+    }
+  }
+  return r;
+}
+
+async function get<T>(path: string): Promise<T> {
+  const r = await authedFetch(path);
   if (!r.ok) throw new Error(`${r.status} ${r.statusText} on ${path}`);
   return r.json() as Promise<T>;
 }
@@ -357,10 +420,7 @@ export async function downloadBiologyCsv(opts: {
 }
 
 async function downloadCsv(url: string, filename: string): Promise<void> {
-  const headers: Record<string, string> = {};
-  const token = getAccessToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const r = await fetch(url, { headers });
+  const r = await authedFetch(url);
   if (!r.ok) throw new Error(`${r.status} ${r.statusText} on ${url}`);
   const blob = await r.blob();
   const a = document.createElement('a');
@@ -1032,10 +1092,8 @@ export async function downloadIvsaCsv(months: number, scope: GeoScopeQ): Promise
 
 async function send<T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T | null> {
   const headers: Record<string, string> = {};
-  const token = getAccessToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const r = await fetch(path, {
+  const r = await authedFetch(path, {
     method, headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
