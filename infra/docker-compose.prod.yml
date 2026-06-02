@@ -1,6 +1,7 @@
 # SIGDEP-3 hub — production-leaning compose. Reproduces the dev topology
-# (single nginx origin in front of Keycloak + the consolidated APIs) but
-# with TLS, real DB credentials and Keycloak in production mode.
+# (single nginx origin in front of the consolidated APIs) but with TLS and
+# real DB credentials. Auth v2.0 : Spring Security + JWT HS256, plus de
+# Keycloak.
 #
 # DO NOT use this file as-is in production: it is a working skeleton that
 # encodes the topology and config knobs. Before going live, replace every
@@ -18,49 +19,9 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:-sigdep}
       POSTGRES_USER:     ${POSTGRES_USER:-sigdep}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      # Passées au script init pour qu'il crée la base + user Keycloak
-      # au premier démarrage (volume postgres_data vierge).
-      KC_DB_NAME:        ${KC_DB_NAME:-keycloak}
-      KC_DB_USERNAME:    ${KC_DB_USERNAME:-keycloak}
-      KC_DB_PASSWORD:    ${KC_DB_PASSWORD:-change-me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Scripts exécutés UNE SEULE FOIS au premier boot (création base
-      # Keycloak). Ignorés ensuite tant que postgres_data n'est pas vidé.
-      - ./postgres/01-init-keycloak.sh:/docker-entrypoint-initdb.d/01-init-keycloak.sh:ro
     # No host port exposed in prod — DB is reached over the compose network.
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:25.0
-    container_name: sigdep-keycloak
-    # `start` (sans --optimized) : Keycloak applique sa build au boot.
-    # Behind a TLS-terminating reverse proxy so HTTP is fine on the inside;
-    # KC_PROXY_HEADERS makes Keycloak honour X-Forwarded-* from nginx.
-    # L'entrypoint custom substitue __PUBLIC_ORIGIN__ dans le realm import
-    # avant de lancer kc.sh.
-    entrypoint: ["/opt/keycloak/entrypoint.sh"]
-    command: ["start", "--import-realm"]
-    environment:
-      KEYCLOAK_ADMIN:          ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me}
-      KC_DB:                   postgres
-      KC_DB_URL:               jdbc:postgresql://postgres:5432/${KC_DB_NAME:-keycloak}
-      KC_DB_USERNAME:          ${KC_DB_USERNAME:-keycloak}
-      KC_DB_PASSWORD:          ${KC_DB_PASSWORD:-change-me}
-      KC_HOSTNAME:             ${KC_HOSTNAME:-https://sigdep.example.org}
-      KC_HOSTNAME_STRICT:      'true'
-      KC_PROXY_HEADERS:        xforwarded
-      KC_HTTP_ENABLED:         'true'
-      # Utilisé par entrypoint.sh pour substituer le placeholder du realm.
-      PUBLIC_ORIGIN:           ${PUBLIC_ORIGIN:-http://localhost:9000}
-    depends_on: [postgres]
-    volumes:
-      # Realm import : monté comme template r/o ; l'entrypoint le copie
-      # dans data/import/ après substitution.
-      - ./keycloak/realm-sigdep.json:/opt/keycloak/data/import-template/realm-sigdep.json:ro
-      - ./keycloak/entrypoint.sh:/opt/keycloak/entrypoint.sh:ro
-      # SIGDEP custom login theme.
-      - ./keycloak/themes/sigdep:/opt/keycloak/themes/sigdep:ro
 
   console-api:
     # Replace with the actual published image (e.g. ghcr.io/itechciv/sigdep-console-api:<tag>).
@@ -70,11 +31,13 @@ services:
       SPRING_DATASOURCE_URL:           jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
       SPRING_DATASOURCE_USERNAME:      ${POSTGRES_USER:-sigdep}
       SPRING_DATASOURCE_PASSWORD:      ${POSTGRES_PASSWORD:-change-me}
-      KEYCLOAK_ISSUER_URI:             ${KC_HOSTNAME:-https://sigdep.example.org}/realms/sigdep
-      KEYCLOAK_SERVER_URL:             http://keycloak:8080
-      KEYCLOAK_ADMIN_CLIENT_SECRET:    ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me}
+      # Auth v2.0 : clé de signature JWT (>= 32 octets) + seed SUPER_ADMIN
+      # au premier boot (si auth.users est vide).
+      SIGDEP_JWT_SECRET:               ${SIGDEP_JWT_SECRET:-change-me-32-bytes-minimum-secret!!}
+      SIGDEP_ADMIN_EMAIL:              ${SIGDEP_ADMIN_EMAIL:-}
+      SIGDEP_ADMIN_PASSWORD:           ${SIGDEP_ADMIN_PASSWORD:-}
       APP_CORS_ALLOWED_ORIGINS:        ${PUBLIC_ORIGIN:-https://sigdep.example.org}
-    depends_on: [postgres, keycloak]
+    depends_on: [postgres]
 
   ingestion-api:
     image: ${INGESTION_API_IMAGE:-sigdep-ingestion-api:latest}
@@ -83,7 +46,6 @@ services:
       SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sigdep}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      KEYCLOAK_ISSUER_URI:        ${KC_HOSTNAME:-https://sigdep.example.org}/realms/sigdep
     depends_on: [postgres]
 
   console-web:
@@ -97,7 +59,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: sigdep-nginx
-    depends_on: [keycloak, console-api, ingestion-api, console-web]
+    depends_on: [console-api, ingestion-api, console-web]
     ports:
       - "80:80"
       - "443:443"

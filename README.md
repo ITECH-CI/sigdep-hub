@@ -44,7 +44,7 @@ utilisateurs authentifiés via le SPA React.
 | `ingestion-api` | Application Spring Boot sur le port `8090`. Reçoit les lots des agents.      |
 | `console-api`   | Application Spring Boot sur le port `8041`. Endpoints console + service SPA. |
 | `console-web`   | Front React 18 + Vite + Tailwind.                                            |
-| `infra/`        | docker-compose dev et prod, configs nginx, realm Keycloak.                   |
+| `infra/`        | docker-compose dev et prod, configs nginx.                                   |
 
 Les migrations Liquibase sont portées par `ingestion-api` (seul
 écrivain) ; la console tourne avec `spring.liquibase.enabled=false`.
@@ -64,43 +64,32 @@ git clone https://github.com/ITECH-CI/sigdep-hub
 cd sigdep-hub
 mvn -DskipTests install
 
-# 3. Démarrer l'infra (Postgres + Keycloak + nginx)
+# 3. Démarrer l'infra (Postgres + nginx)
 cd infra && docker compose up -d && cd ..
 
-# 4. Appliquer le userprofile Keycloak (à faire une fois, après import du realm)
-docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://localhost:8080 --realm master --user admin --password admin
-docker cp infra/keycloak/extras/userprofile-sigdep.json \
-  sigdep-keycloak:/tmp/userprofile-sigdep.json
-docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh update users/profile \
-  -r sigdep -f /tmp/userprofile-sigdep.json
-
-# 5. Lancer les trois processus (trois terminaux)
+# 4. Lancer les trois processus (trois terminaux)
 cp ingestion-api/.env.example ingestion-api/.env
 cp console-api/.env.example   console-api/.env
+# Renseigner SIGDEP_ADMIN_EMAIL / SIGDEP_ADMIN_PASSWORD dans console-api/.env
+# pour seeder le compte SUPER_ADMIN au premier démarrage.
 
 (cd ingestion-api && ./run.sh --dev)             # port 8090, applique Liquibase
-(cd console-api    && ./run.sh --dev)            # port 8041
+(cd console-api    && ./run.sh --dev)            # port 8041, seede l'admin
 (cd console-web    && npm install && npm run dev) # port 5173 (passe par nginx)
 ```
 
-Ouvrir **http://localhost:9000** dans le navigateur. Comptes par
-défaut :
+Ouvrir **http://localhost:9000** dans le navigateur et se connecter
+avec le SUPER_ADMIN seedé (`SIGDEP_ADMIN_EMAIL` / `SIGDEP_ADMIN_PASSWORD`).
+Les autres comptes se créent ensuite via la page **Utilisateurs**
+(rôle unique + zone d'intervention).
 
-| Identifiant       | Mot de passe | Rôles                                        |
-| ----------------- | ------------ | -------------------------------------------- |
-| `pkomena`         | `sigdep`     | `SUPER_ADMIN`, `IT_ADMIN`, `NATIONAL_VIEWER` |
-| `national-viewer` | `sigdep`     | `NATIONAL_VIEWER`                            |
-| `site-user`       | `sigdep`     | `SITE_USER` (nécessite un attribut `siteId`) |
-
-| Composant                       | Port | Notes                                                |
-| ------------------------------- | ---- | ---------------------------------------------------- |
-| nginx (point d'entrée)          | 9000 | Origin unique pour toute la stack                    |
-| Vite dev server (HMR)           | 5173 | Atteint via le proxy nginx                           |
-| console-api                     | 8041 | Spring Boot                                          |
-| ingestion-api                   | 8090 | Spring Boot, porteur du changelog Liquibase          |
-| Keycloak (admin direct uniquement) | 8180 | Le trafic courant passe par nginx sur :9000        |
-| Postgres                        | 5436 | Base `sigdep`, utilisateur `sigdep`/`sigdep`         |
+| Composant              | Port | Notes                                                |
+| ---------------------- | ---- | ---------------------------------------------------- |
+| nginx (point d'entrée) | 9000 | Origin unique pour toute la stack                    |
+| Vite dev server (HMR)  | 5173 | Atteint via le proxy nginx                           |
+| console-api            | 8041 | Spring Boot — auth JWT + endpoints console           |
+| ingestion-api          | 8090 | Spring Boot, porteur du changelog Liquibase          |
+| Postgres               | 5436 | Base `sigdep`, utilisateur `sigdep`/`sigdep`         |
 
 ## Documentation
 
@@ -123,8 +112,8 @@ utiles pour un pilote :
   modèle d'auth (JWT + AuthScope), règles de geo-scoping, calcul des
   indicateurs.
 - [docs/OPERATIONS.md](docs/OPERATIONS.md) — commandes du quotidien
-  (kcadm, Liquibase, run.sh), dépannage des problèmes rencontrés en
-  développement (CORS, attributs utilisateur, dev profile, …).
+  (Liquibase, run.sh, gestion des comptes), dépannage des problèmes
+  rencontrés en développement (CORS, JWT, dev profile, …).
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — notes d'installation
   historiques basées sur `infra/docker-compose.prod.yml`. Pour un
   déploiement réel aujourd'hui, suivre plutôt
@@ -132,8 +121,6 @@ utiles pour un pilote :
   qui reflète le flux GHCR.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — workflow git, conventions de
   commit, style de code.
-- [infra/keycloak/README.md](infra/keycloak/README.md) — import du
-  realm, attributs user-profile, snippets kcadm.sh.
 
 ## Images de conteneurs
 

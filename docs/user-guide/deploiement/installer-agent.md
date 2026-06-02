@@ -25,14 +25,15 @@ Sur le poste cible (site) :
 - **MySQL** local (= la base OpenMRS du site). L'agent y lit en
   lecture seule.
 - **Accès réseau sortant** vers le hub central (HTTPS, port 443).
-- **Accès réseau sortant** vers le Keycloak central (port 443).
 
 Côté hub (à demander à l'équipe SIGDEP centrale) :
 
 - **Code du site** (`SIGDEP_SITE_CODE`) — identifiant unique du site
   dans `core.sites` (ex. `CHU_TREICHVILLE`).
-- **Client secret Keycloak** (`SIGDEP_KEYCLOAK_CLIENT_SECRET`) pour
-  l'authentification machine-to-machine.
+- **Clé API du site** (`SIGDEP_API_KEY`) — générée depuis la console
+  (page **Sites** → « Gérer » → « Générer une clé »), affichée une
+  seule fois. C'est elle qui authentifie l'agent auprès du hub
+  (en-tête `X-API-Key`).
 
 ## Préparer l'utilisateur MySQL en lecture seule
 
@@ -100,10 +101,8 @@ SIGDEP_LOCAL_DB_PASSWORD=...
 # Buffer local (laisser le défaut sauf besoin spécifique)
 SIGDEP_BUFFER_PATH=/var/lib/sigdep-agent/buffer.sqlite
 
-# Keycloak central
-SIGDEP_KEYCLOAK_URL=https://sigdep.pnls.ci
-SIGDEP_KEYCLOAK_CLIENT_ID=sigdep-agent
-SIGDEP_KEYCLOAK_CLIENT_SECRET=...
+# Authentification : clé API du site (en-tête X-API-Key)
+SIGDEP_API_KEY=...
 
 # Paramètres avancés (laisser le défaut)
 SIGDEP_BATCH_SIZE=500
@@ -208,8 +207,8 @@ Ouvrez `.env` et complétez :
 - `SIGDEP_SITE_CODE` — fourni par le hub.
 - `SIGDEP_LOCAL_DB_URL` / USER / PASSWORD — selon le scénario réseau.
 - `SIGDEP_CENTRAL_API_URL` — URL publique du hub.
-- `SIGDEP_KEYCLOAK_URL` + `SIGDEP_KEYCLOAK_CLIENT_SECRET` — fournis
-  par le hub.
+- `SIGDEP_API_KEY` — clé API du site, générée dans la console (page
+  Sites), fournie par le hub.
 - `SIGDEP_SYNC_TAG` (optionnel) — pour épingler une version précise
   au lieu de `latest`.
 
@@ -276,7 +275,7 @@ Dans le dossier d'extraction :
    - `SIGDEP_SITE_CODE`
    - `SIGDEP_LOCAL_DB_PASSWORD`
    - `SIGDEP_CENTRAL_API_URL`
-   - `SIGDEP_KEYCLOAK_CLIENT_SECRET`
+   - `SIGDEP_API_KEY`
    - `SIGDEP_BUFFER_PATH` (par défaut `C:\sigdep-sync\buffer.sqlite`,
      adapter si le dossier d'extraction est différent).
 
@@ -425,7 +424,9 @@ Causes fréquentes :
 ### L'agent démarre mais n'envoie rien
 
 - **Vérifier la connectivité hub** : `curl -fsSL <SIGDEP_CENTRAL_API_URL>/actuator/health`.
-- **Vérifier Keycloak** : `curl -fsSL <SIGDEP_KEYCLOAK_URL>/realms/sigdep`.
+- **Vérifier la clé API** : un push qui revient en `401` signale une
+  `SIGDEP_API_KEY` absente, erronée ou révoquée — régénérer la clé
+  dans la console (page Sites) et la recopier dans `.env`.
 - **Vérifier MySQL local** :
   - Mode A : `mysql -u sigdep_reader -p openmrs -e 'SELECT 1'`.
   - Mode B : l'erreur de connexion apparaît dans les premières lignes

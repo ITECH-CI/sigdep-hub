@@ -34,13 +34,6 @@ app:
     email: ${SIGDEP_ADMIN_EMAIL:}
     password: ${SIGDEP_ADMIN_PASSWORD:}
     display-name: ${SIGDEP_ADMIN_NAME:Administrateur SIGDEP}
-  # NB v2.0 : Keycloak est en cours de retrait (PR4). Tant que
-  # KeycloakAdminService/UsersController existent, ce bloc reste requis au boot.
-  keycloak:
-    server-url: ${KEYCLOAK_SERVER_URL:http://localhost:8180}
-    realm: ${KEYCLOAK_REALM:sigdep}
-    admin-client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:sigdep-console-admin}
-    admin-client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:console-admin-dev-secret-change-me}
   web:
     resources:
       static-locations: classpath:/static/

@@ -1,10 +1,8 @@
-# Local development profile.
-# Activate with: SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
-# - Disables auth on the console (see ConsoleSecurityConfig#devFilterChain)
-# - Skips OAuth2 resource server auto-configuration so we don't try to fetch
-#   the JWK set from Keycloak at boot.
-
-spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+# Profil de développement local.
+# Activer avec : SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+#
+# L'auth v2.0 (JWT HS256) est active comme en prod ; en dev on s'appuie sur
+# le SUPER_ADMIN seedé via SIGDEP_ADMIN_EMAIL/SIGDEP_ADMIN_PASSWORD et le
+# secret par défaut de app.jwt.secret. Aucune dépendance externe (plus de
+# Keycloak/JWK à récupérer au boot).
+spring: {}

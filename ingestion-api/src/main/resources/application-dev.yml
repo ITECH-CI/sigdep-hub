@@ -1,10 +1,5 @@
-# Local development profile.
-# Activate with: SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
-# - Disables auth on /api/v1/sync/** (see IngestionSecurityConfig#devFilterChain)
-# - Skips the OAuth2 resource server auto-configuration so we don't try to
-#   fetch the JWK set from Keycloak at boot.
-
-spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+# Profil de développement local.
+# Activer avec : SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+# - Désactive l'auth sur /api/v1/sync/** (cf. IngestionSecurityConfig#devFilterChain)
+#   pour les tests locaux : pas besoin de clé API en dev.
+spring: {}

@@ -9,7 +9,7 @@ import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
+import ci.itechciv.sigdep.hub.console.security.AuthenticatedUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -69,9 +69,8 @@ public class RejectedRecordController {
             @RequestBody(required = false) ResolveRequest body,
             Authentication auth) {
         String username = "unknown";
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            String preferred = jwt.getClaim("preferred_username");
-            if (preferred != null && !preferred.isBlank()) username = preferred;
+        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user) {
+            if (user.email() != null && !user.email().isBlank()) username = user.email();
         }
         boolean ok = service.resolve(id, username, body == null ? null : body.note());
         return ok ? ResponseEntity.noContent().build()

@@ -168,19 +168,17 @@ jobs:
       # -----------------------------------------------------------------
       # Deploy bundle — tarball with everything a site admin needs to
       # bring up the hub on a fresh server: docker-compose.prod.yml,
-      # nginx.prod.conf, Keycloak realm + theme, .env.example. The
-      # tarball is attached to the GitHub Release of this tag.
+      # nginx.prod.conf, .env.example. The tarball is attached to the
+      # GitHub Release of this tag.
       # -----------------------------------------------------------------
       - name: Stage deploy bundle
         run: |
           PKG=sigdep-hub-deploy-${{ steps.tag.outputs.version }}
           mkdir -p "deploy-build/$PKG"
 
-          # Compose + nginx + Keycloak realm/theme + env example
+          # Compose + nginx + env example
           cp infra/docker-compose.prod.yml "deploy-build/$PKG/docker-compose.yml"
           cp -r infra/nginx                "deploy-build/$PKG/nginx"
-          cp -r infra/keycloak             "deploy-build/$PKG/keycloak"
-          cp -r infra/postgres             "deploy-build/$PKG/postgres"
           cp infra/.env.example            "deploy-build/$PKG/.env.example"
 
           # Pin the image tags of this release inside the bundled .env.example
