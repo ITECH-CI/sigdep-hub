@@ -42,4 +42,10 @@
     <include file="db/changelog/v1.0/033-add-visits-ivsa-columns.xml"/>
     <include file="db/changelog/v1.0/034-fix-source-uuid-types.xml"/>
 
+    <!-- v2.0 — Auth Spring Security pure (remplace Keycloak) -->
+    <include file="db/changelog/v2.0/035-create-auth-users.xml"/>
+    <include file="db/changelog/v2.0/036-create-auth-refresh-tokens.xml"/>
+    <include file="db/changelog/v2.0/037-create-auth-password-reset-otp.xml"/>
+    <include file="db/changelog/v2.0/038-create-auth-api-keys.xml"/>
+
 </databaseChangeLog>

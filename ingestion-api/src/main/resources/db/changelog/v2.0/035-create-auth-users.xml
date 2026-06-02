@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      v2.0 — Authentification Spring Security pure (remplace Keycloak).
+      Schema `auth` : comptes utilisateurs + portée géographique.
+    -->
+    <changeSet id="035-create-auth-schema" author="itechciv" failOnError="true">
+        <sql splitStatements="true">
+            CREATE SCHEMA IF NOT EXISTS auth;
+        </sql>
+        <rollback>
+            <sql>DROP SCHEMA IF EXISTS auth CASCADE;</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="035-create-auth-users" author="itechciv" failOnError="true">
+        <createTable tableName="users" schemaName="auth"
+                     remarks="Comptes utilisateurs de la console (auth Spring Security + JWT HS256).">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password_hash" type="VARCHAR(255)" remarks="BCrypt">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(32)"
+                    remarks="Un des 8 rôles : SUPER_ADMIN, IT_ADMIN, NATIONAL_VIEWER, REGIONAL_COORD, DISTRICT_COORD, SITE_USER, ANALYST, AUDITOR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_level" type="VARCHAR(16)"
+                    remarks="NATIONAL / REGION / DISTRICT / SITE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="password_expired" type="BOOLEAN" defaultValueBoolean="false"
+                    remarks="Force le changement de mot de passe au prochain login">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_login_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="users" schemaName="auth" indexName="idx_auth_users_role">
+            <column name="role"/>
+        </createIndex>
+        <sql>
+            CREATE INDEX idx_auth_users_active ON auth.users(active) WHERE active = TRUE;
+        </sql>
+
+        <rollback>
+            <dropTable tableName="users" schemaName="auth"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="035-create-auth-user-geo-scope" author="itechciv" failOnError="true">
+        <createTable tableName="user_geo_scope" schemaName="auth"
+                     remarks="Portée géographique d'un utilisateur zone-bound. Exactement un des 3 IDs non-null selon user_level.">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_user_geo_scope_user"
+                             references="auth.users(id)" deleteCascade="true"/>
+            </column>
+            <column name="region_id" type="BIGINT">
+                <constraints foreignKeyName="fk_user_geo_scope_region"
+                             references="core.regions(id)"/>
+            </column>
+            <column name="district_id" type="BIGINT">
+                <constraints foreignKeyName="fk_user_geo_scope_district"
+                             references="core.districts(id)"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints foreignKeyName="fk_user_geo_scope_site"
+                             references="core.sites(id)"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="user_geo_scope" schemaName="auth" indexName="idx_user_geo_scope_user">
+            <column name="user_id"/>
+        </createIndex>
+
+        <!-- Exactement un des 3 IDs non-null : XOR à 3 termes. -->
+        <sql>
+            ALTER TABLE auth.user_geo_scope
+                ADD CONSTRAINT ck_user_geo_scope_exactly_one
+                CHECK (
+                    (CASE WHEN region_id   IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN district_id IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN site_id     IS NOT NULL THEN 1 ELSE 0 END) = 1
+                );
+        </sql>
+
+        <rollback>
+            <dropTable tableName="user_geo_scope" schemaName="auth"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

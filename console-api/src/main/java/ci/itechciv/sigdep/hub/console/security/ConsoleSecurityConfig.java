@@ -1,25 +1,32 @@
 package ci.itechciv.sigdep.hub.console.security;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+/**
+ * Sécurité console — auth Spring Security pure (v2.0, remplace Keycloak).
+ *
+ * Les requêtes portent un JWT HS256 dans {@code Authorization: Bearer …},
+ * vérifié par {@link JwtAuthFilter}. Les endpoints {@code /api/auth/login} et
+ * {@code /api/auth/refresh} sont publics (pas encore de token) ; tout le reste
+ * exige un JWT valide.
+ */
 @Configuration
 @EnableMethodSecurity
 public class ConsoleSecurityConfig {
@@ -33,6 +40,12 @@ public class ConsoleSecurityConfig {
     @Value("${app.cors.allowed-origins:http://localhost:9000,http://127.0.0.1:9000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8041,http://127.0.0.1:8041}")
     private String allowedOrigins;
 
+    private final JwtAuthFilter jwtAuthFilter;
+
+    public ConsoleSecurityConfig(JwtAuthFilter jwtAuthFilter) {
+        this.jwtAuthFilter = jwtAuthFilter;
+    }
+
     @Bean
     public SecurityFilterChain consoleFilterChain(HttpSecurity http) throws Exception {
         return http
@@ -43,11 +56,29 @@ public class ConsoleSecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/", "/index.html", "/assets/**", "/favicon.ico").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/refresh",
+                                "/api/auth/password/forgot", "/api/auth/password/reset").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
-                        .jwtAuthenticationConverter(jwtAuthConverter())))
+                // Requête non authentifiée → 401 (et non le 403 par défaut).
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                        new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthUserDetailsService uds,
+                                                       PasswordEncoder encoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(uds);
+        provider.setPasswordEncoder(encoder);
+        return provider::authenticate;
     }
 
     @Bean
@@ -66,32 +97,5 @@ public class ConsoleSecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
-    }
-
-    /**
-     * Map Keycloak's realm_access.roles claim to ROLE_* authorities, and
-     * also keep the standard "scope"/"scp" claims as SCOPE_*.
-     */
-    private JwtAuthenticationConverter jwtAuthConverter() {
-        JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            List<GrantedAuthority> all = new ArrayList<>(scopes.convert(jwt));
-            all.addAll(realmRoles(jwt));
-            return all;
-        });
-        converter.setPrincipalClaimName("preferred_username");
-        return converter;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Collection<GrantedAuthority> realmRoles(Jwt jwt) {
-        Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-        if (realmAccess == null) return List.of();
-        Object roles = realmAccess.get("roles");
-        if (!(roles instanceof Collection<?> c)) return List.of();
-        return ((Collection<String>) c).stream()
-                .map(r -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + r))
-                .toList();
     }
 }

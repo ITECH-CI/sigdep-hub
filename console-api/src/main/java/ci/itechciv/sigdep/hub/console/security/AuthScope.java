@@ -1,11 +1,9 @@
 package ci.itechciv.sigdep.hub.console.security;
 
 import java.util.Collection;
-import java.util.Map;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 /**
@@ -68,11 +66,11 @@ public class AuthScope {
         return new Scope(uiRegion, uiDistrict, uiSite);
     }
 
-    /** Read regionId/districtId/siteId claims from the current JWT, if any. */
+    /** Read the geo scope from the current {@link AuthenticatedUser}, if any. */
     private Scope jwtCeiling() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return Scope.NONE;
-        if (!(auth.getPrincipal() instanceof Jwt jwt)) return Scope.NONE;
+        if (!(auth.getPrincipal() instanceof AuthenticatedUser user)) return Scope.NONE;
 
         // Roles that bypass scope entirely. Anyone with one of these holds a
         // "national" view; even if they happen to also have a regionId set
@@ -84,10 +82,7 @@ public class AuthScope {
             return Scope.NONE;
         }
 
-        return new Scope(
-                claimAsLong(jwt, "regionId"),
-                claimAsLong(jwt, "districtId"),
-                claimAsLong(jwt, "siteId"));
+        return new Scope(user.regionId(), user.districtId(), user.siteId());
     }
 
     private static boolean hasAnyAuthority(Collection<? extends GrantedAuthority> authorities, String... names) {
@@ -97,21 +92,5 @@ public class AuthScope {
             }
         }
         return false;
-    }
-
-    /**
-     * Read a claim as Long. Keycloak emits long-typed claims as strings in
-     * some configurations and as numbers in others — accept both.
-     */
-    private static Long claimAsLong(Jwt jwt, String claim) {
-        Object raw = jwt.getClaim(claim);
-        if (raw == null) return null;
-        if (raw instanceof Number n) return n.longValue();
-        if (raw instanceof String s && !s.isBlank()) {
-            try { return Long.parseLong(s.trim()); }
-            catch (NumberFormatException ex) { return null; }
-        }
-        if (raw instanceof Map<?, ?>) return null; // shouldn't happen
-        return null;
     }
 }
