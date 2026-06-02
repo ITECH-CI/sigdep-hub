@@ -31,11 +31,13 @@ services:
       SPRING_DATASOURCE_URL:           jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
       SPRING_DATASOURCE_USERNAME:      ${POSTGRES_USER:-sigdep}
       SPRING_DATASOURCE_PASSWORD:      ${POSTGRES_PASSWORD:-change-me}
-      # Auth v2.0 : clé de signature JWT (>= 32 octets) + seed SUPER_ADMIN
-      # au premier boot (si auth.users est vide).
+      # Auth v2.0 : clé de signature JWT (>= 32 octets) + seed des comptes
+      # d'administration au premier boot (SUPER_ADMIN + IT_ADMIN).
       SIGDEP_JWT_SECRET:               ${SIGDEP_JWT_SECRET:-change-me-32-bytes-minimum-secret!!}
       SIGDEP_ADMIN_EMAIL:              ${SIGDEP_ADMIN_EMAIL:-}
       SIGDEP_ADMIN_PASSWORD:           ${SIGDEP_ADMIN_PASSWORD:-}
+      SIGDEP_IT_ADMIN_EMAIL:           ${SIGDEP_IT_ADMIN_EMAIL:-}
+      SIGDEP_IT_ADMIN_PASSWORD:        ${SIGDEP_IT_ADMIN_PASSWORD:-}
       APP_CORS_ALLOWED_ORIGINS:        ${PUBLIC_ORIGIN:-https://sigdep.example.org}
     depends_on: [postgres]
 

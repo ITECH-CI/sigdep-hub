@@ -58,9 +58,12 @@ public class UserAdminService {
     public UserPage list(String search, int page, int size) {
         int safeSize = Math.max(1, Math.min(200, size));
         int safePage = Math.max(0, page);
-        String q = (search == null || search.isBlank()) ? null : search.trim();
+        // Motif LIKE non-null, déjà en minuscules. Recherche vide → "%" (tout).
+        String pattern = (search == null || search.isBlank())
+                ? "%"
+                : "%" + search.trim().toLowerCase() + "%";
 
-        var result = users.search(q, PageRequest.of(safePage, safeSize));
+        var result = users.search(pattern, PageRequest.of(safePage, safeSize));
         List<UserRow> rows = result.getContent().stream().map(this::toRow).toList();
         return new UserPage(rows, result.getTotalElements(), safePage, safeSize);
     }

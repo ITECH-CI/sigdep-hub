@@ -137,11 +137,14 @@ Renseigner au minimum :
 # Postgres
 POSTGRES_PASSWORD=<mot_de_passe_fort>
 
-# Auth v2.0 — URL publique (CORS) + clé de signature JWT + 1er admin
+# Auth v2.0 — URL publique (CORS) + clé de signature JWT + comptes admin
 PUBLIC_ORIGIN=https://sigdep.pnls.ci
 SIGDEP_JWT_SECRET=<chaîne aléatoire ≥ 32 octets>   # openssl rand -base64 48
+# Deux comptes seedés au 1er boot : SUPER_ADMIN + IT_ADMIN.
 SIGDEP_ADMIN_EMAIL=admin@pnls.ci
 SIGDEP_ADMIN_PASSWORD=<mot_de_passe_fort>
+SIGDEP_IT_ADMIN_EMAIL=it-admin@pnls.ci
+SIGDEP_IT_ADMIN_PASSWORD=<mot_de_passe_fort>
 ```
 
 Les tags d'images (`CONSOLE_API_IMAGE`, `INGESTION_API_IMAGE`,
@@ -175,9 +178,10 @@ Au premier démarrage :
 - **Postgres** se crée et Liquibase exécute les migrations (création
   des schémas `core` + `audit` + `auth`, seeds des régions / districts
   / sites / identifier_types).
-- **console-api** crée le compte **SUPER_ADMIN** initial à partir de
-  `SIGDEP_ADMIN_EMAIL` / `SIGDEP_ADMIN_PASSWORD` (uniquement si la table
-  `auth.users` est vide).
+- **console-api** crée les comptes d'administration initiaux —
+  **SUPER_ADMIN** (`SIGDEP_ADMIN_*`) et **IT_ADMIN** (`SIGDEP_IT_ADMIN_*`).
+  Le seed est idempotent par email : un compte déjà présent n'est jamais
+  réécrasé.
 - **ingestion-api** et **console-api** se connectent à Postgres.
 - **nginx** termine la TLS et route les requêtes.
 
@@ -189,11 +193,12 @@ docker compose logs -f
 ```
 
 Tous les services doivent passer à `healthy` en 2-3 minutes.
-Confirmer que le SUPER_ADMIN a bien été seedé :
+Confirmer que les comptes admin ont bien été seedés :
 
 ```bash
-docker compose logs console-api | grep -i "SUPER_ADMIN"
+docker compose logs console-api | grep -iE "SUPER_ADMIN|IT_ADMIN"
 # → "Compte SUPER_ADMIN initial créé pour admin@pnls.ci"
+# → "Compte IT_ADMIN initial créé pour it-admin@pnls.ci"
 ```
 
 ## Étape 5 — Se connecter et créer les comptes

@@ -11,10 +11,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Crée le compte SUPER_ADMIN initial au premier boot, uniquement si la table
- * {@code auth.users} est vide ET que {@code SIGDEP_ADMIN_EMAIL} /
- * {@code SIGDEP_ADMIN_PASSWORD} sont fournis. Une fois au moins un compte
- * présent, ce runner ne fait plus rien (idempotent).
+ * Crée les comptes d'administration initiaux au démarrage : un SUPER_ADMIN et
+ * un IT_ADMIN. Le seed est piloté par la config ({@code app.admin.*} /
+ * {@code app.it-admin.*}) — en prod, fournir les valeurs via le {@code .env} ;
+ * en dev, des défauts permettent d'avoir l'appli opérationnelle sans config.
+ *
+ * Le seed est <b>idempotent par email</b> : chaque compte n'est créé que s'il
+ * n'existe pas déjà. Modifier le mot de passe d'un compte existant se fait via
+ * la page Utilisateurs, pas ici (on ne réécrase jamais un compte présent).
+ *
+ * Pour désactiver tout seed (ex. en prod après bootstrap), laisser les
+ * mots de passe vides.
  */
 @Component
 public class AdminSeeder implements ApplicationRunner {
@@ -23,44 +30,59 @@ public class AdminSeeder implements ApplicationRunner {
 
     private final AuthUserRepository users;
     private final PasswordEncoder encoder;
-    private final String adminEmail;
-    private final String adminPassword;
-    private final String adminName;
+
+    private final String superAdminEmail;
+    private final String superAdminPassword;
+    private final String superAdminName;
+
+    private final String itAdminEmail;
+    private final String itAdminPassword;
+    private final String itAdminName;
 
     public AdminSeeder(AuthUserRepository users,
                        PasswordEncoder encoder,
-                       @Value("${app.admin.email:}") String adminEmail,
-                       @Value("${app.admin.password:}") String adminPassword,
-                       @Value("${app.admin.display-name:Administrateur SIGDEP}") String adminName) {
+                       @Value("${app.admin.email:admin@sigdep.ci}") String superAdminEmail,
+                       @Value("${app.admin.password:ChangeMe2026!}") String superAdminPassword,
+                       @Value("${app.admin.display-name:Super Administrateur SIGDEP}") String superAdminName,
+                       @Value("${app.it-admin.email:it-admin@sigdep.ci}") String itAdminEmail,
+                       @Value("${app.it-admin.password:ChangeMe2026!}") String itAdminPassword,
+                       @Value("${app.it-admin.display-name:Administrateur Technique SIGDEP}") String itAdminName) {
         this.users = users;
         this.encoder = encoder;
-        this.adminEmail = adminEmail;
-        this.adminPassword = adminPassword;
-        this.adminName = adminName;
+        this.superAdminEmail = superAdminEmail;
+        this.superAdminPassword = superAdminPassword;
+        this.superAdminName = superAdminName;
+        this.itAdminEmail = itAdminEmail;
+        this.itAdminPassword = itAdminPassword;
+        this.itAdminName = itAdminName;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        if (users.count() > 0) {
-            return; // au moins un compte existe déjà
+        seed(superAdminEmail, superAdminPassword, superAdminName, "SUPER_ADMIN");
+        seed(itAdminEmail, itAdminPassword, itAdminName, "IT_ADMIN");
+    }
+
+    /** Crée le compte s'il n'existe pas déjà (idempotent par email). */
+    private void seed(String email, String password, String displayName, String role) {
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            return; // compte non configuré → on ne seed rien
         }
-        if (adminEmail.isBlank() || adminPassword.isBlank()) {
-            log.warn("auth.users est vide mais SIGDEP_ADMIN_EMAIL/SIGDEP_ADMIN_PASSWORD "
-                    + "ne sont pas définis — aucun compte SUPER_ADMIN seedé. "
-                    + "Aucune connexion possible tant qu'un compte n'est pas créé.");
-            return;
+        String normalized = email.trim().toLowerCase();
+        if (users.existsByEmailIgnoreCase(normalized)) {
+            return; // déjà présent → on ne touche pas
         }
 
-        AuthUser admin = new AuthUser();
-        admin.setEmail(adminEmail.trim());
-        admin.setPasswordHash(encoder.encode(adminPassword));
-        admin.setDisplayName(adminName);
-        admin.setRole("SUPER_ADMIN");
-        admin.setUserLevel("NATIONAL");
-        admin.setActive(true);
-        admin.setPasswordExpired(false);
-        users.save(admin);
+        AuthUser u = new AuthUser();
+        u.setEmail(normalized);
+        u.setPasswordHash(encoder.encode(password));
+        u.setDisplayName(displayName);
+        u.setRole(role);
+        u.setUserLevel("NATIONAL");
+        u.setActive(true);
+        u.setPasswordExpired(false);
+        users.save(u);
 
-        log.info("Compte SUPER_ADMIN initial créé pour {}", admin.getEmail());
+        log.info("Compte {} initial créé pour {}", role, normalized);
     }
 }

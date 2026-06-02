@@ -16,11 +16,19 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, Long> {
 
     long countByActiveTrue();
 
+    /**
+     * Recherche par email ou nom. {@code pattern} est un motif LIKE déjà
+     * normalisé en minuscules et entouré de {@code %} (jamais null) — fourni
+     * par le service. Passer {@code "%"} pour tout renvoyer.
+     *
+     * NB : on ne réutilise pas un paramètre potentiellement null dans
+     * {@code LOWER(...)} pour éviter que PostgreSQL ne l'infère en {@code bytea}
+     * ("function lower(bytea) does not exist").
+     */
     @Query("""
             SELECT u FROM AuthUser u
-            WHERE :q IS NULL
-               OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
-               OR LOWER(u.displayName) LIKE LOWER(CONCAT('%', :q, '%'))
+            WHERE LOWER(u.email) LIKE :pattern
+               OR LOWER(u.displayName) LIKE :pattern
             """)
-    Page<AuthUser> search(@Param("q") String q, Pageable pageable);
+    Page<AuthUser> search(@Param("pattern") String pattern, Pageable pageable);
 }

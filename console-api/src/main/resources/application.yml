@@ -29,11 +29,17 @@ app:
     issuer: ${SIGDEP_JWT_ISSUER:sigdep-hub}
     access-ttl: ${SIGDEP_JWT_ACCESS_TTL:PT1H}
     refresh-ttl: ${SIGDEP_JWT_REFRESH_TTL:P7D}
+  # Comptes d'administration seedés au démarrage (AdminSeeder), idempotents
+  # par email. En prod, surcharger via le .env ET CHANGER les mots de passe
+  # par défaut. Laisser un mot de passe vide désactive le seed de ce compte.
   admin:
-    # SUPER_ADMIN seedé au 1er boot si la table auth.users est vide.
-    email: ${SIGDEP_ADMIN_EMAIL:}
-    password: ${SIGDEP_ADMIN_PASSWORD:}
-    display-name: ${SIGDEP_ADMIN_NAME:Administrateur SIGDEP}
+    email: ${SIGDEP_ADMIN_EMAIL:admin@sigdep.ci}
+    password: ${SIGDEP_ADMIN_PASSWORD:ChangeMe2026!}
+    display-name: ${SIGDEP_ADMIN_NAME:Super Administrateur SIGDEP}
+  it-admin:
+    email: ${SIGDEP_IT_ADMIN_EMAIL:it-admin@sigdep.ci}
+    password: ${SIGDEP_IT_ADMIN_PASSWORD:ChangeMe2026!}
+    display-name: ${SIGDEP_IT_ADMIN_NAME:Administrateur Technique SIGDEP}
   web:
     resources:
       static-locations: classpath:/static/
