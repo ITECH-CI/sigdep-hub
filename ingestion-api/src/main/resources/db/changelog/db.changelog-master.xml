@@ -47,5 +47,6 @@
     <include file="db/changelog/v2.0/036-create-auth-refresh-tokens.xml"/>
     <include file="db/changelog/v2.0/037-create-auth-password-reset-otp.xml"/>
     <include file="db/changelog/v2.0/038-create-auth-api-keys.xml"/>
+    <include file="db/changelog/v2.0/039-api-keys-unique-active.xml"/>
 
 </databaseChangeLog>

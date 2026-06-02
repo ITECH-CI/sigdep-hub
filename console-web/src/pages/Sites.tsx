@@ -200,6 +200,19 @@ function ApiKeyModal({ site, onClose }:
   const [generated, setGenerated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyKey = async () => {
+    if (!generated) return;
+    try {
+      await navigator.clipboard.writeText(generated);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard refusé (contexte non sécurisé) — l'utilisateur copie à la main
+      setError('Copie automatique indisponible — sélectionne et copie la clé manuellement.');
+    }
+  };
 
   const statusQ = useQuery({
     queryKey: ['apiKey', site.id],
@@ -253,6 +266,12 @@ function ApiKeyModal({ site, onClose }:
               <code className="block break-all rounded bg-white border border-amber-200 px-2 py-1.5 text-xs font-mono">
                 {generated}
               </code>
+              <button
+                onClick={copyKey}
+                className="inline-flex items-center gap-1 text-xs rounded bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 transition">
+                <KeyRound className="h-3 w-3" />
+                {copied ? 'Copié !' : 'Copier la clé'}
+              </button>
             </div>
           ) : statusQ.isLoading ? (
             <p className="text-ink-muted">Chargement…</p>

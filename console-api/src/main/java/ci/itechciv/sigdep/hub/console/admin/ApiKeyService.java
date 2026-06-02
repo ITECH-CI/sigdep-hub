@@ -56,10 +56,13 @@ public class ApiKeyService {
         if (!sites.existsById(siteId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Site introuvable");
         }
-        // Révoque la clé active existante (rotation).
+        // Révoque la clé active existante (rotation). Flush immédiat pour que
+        // l'UPDATE (revoked_at) parte avant l'INSERT de la nouvelle clé :
+        // l'index UNIQUE partiel (site_id WHERE revoked_at IS NULL) verrait
+        // sinon deux clés actives au flush en fin de transaction.
         apiKeys.findBySiteIdAndRevokedAtIsNull(siteId).ifPresent(existing -> {
             existing.setRevokedAt(Instant.now());
-            apiKeys.save(existing);
+            apiKeys.saveAndFlush(existing);
         });
 
         String rawKey = UUID.randomUUID().toString();
