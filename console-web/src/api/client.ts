@@ -1466,3 +1466,16 @@ export function fetchSyncRejectsOpenCounts(scope: GeoScopeQ) {
 export function resolveSyncReject(id: number, note?: string) {
   return send<void>('POST', `/api/v1/sync/rejected/${id}/resolve`, { note });
 }
+
+/**
+ * Résolution en masse vérifiée pour un site : marque résolus les rejets dont
+ * la donnée est désormais présente côté hub (re-synchro réussie). Renvoie le
+ * nombre de rejets soldés. `entityType` optionnel pour cibler un type.
+ */
+export function bulkResolveSyncRejects(opts: { siteId: number; entityType?: string; note?: string }) {
+  return send<{ resolved: number }>('POST', '/api/v1/sync/rejected/bulk-resolve', {
+    siteId: opts.siteId,
+    entityType: opts.entityType,
+    note: opts.note,
+  });
+}

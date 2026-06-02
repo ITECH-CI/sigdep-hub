@@ -8,7 +8,7 @@ import {
   BatchRow, LateBucket, LateSiteRow, RejectBucket, RejectRow,
   fetchSyncBatches, fetchSyncDaily, fetchSyncLateSites,
   fetchSyncRejects, fetchSyncRejectsOpenCounts, fetchSyncSummary,
-  resolveSyncReject,
+  resolveSyncReject, bulkResolveSyncRejects,
 } from '../api/client';
 import { CheckCircle2, Copy, RefreshCcw, X } from 'lucide-react';
 import { Kpi, formatInt } from '../components/Kpi';
@@ -449,7 +449,9 @@ function RejectsTable({ scope }: Readonly<{ scope: GeoScope }>) {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<RejectRow | null>(null);
   const [toResolve, setToResolve] = useState<RejectRow | null>(null);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
   const size = 50;
+  const qc = useQueryClient();
 
   const rejects = useQuery({
     queryKey: ['sync-rejects', scope, bucket, entityType, sort, page],
@@ -457,6 +459,21 @@ function RejectsTable({ scope }: Readonly<{ scope: GeoScope }>) {
       ...scope, bucket, entityType: entityType || undefined,
       sort, page, size,
     }),
+  });
+
+  // Résolution en masse : réservée à un site précis (la vérification se fait
+  // par (site_id, source_uuid)). Désactivée si aucun site n'est sélectionné.
+  const bulk = useMutation({
+    mutationFn: () => bulkResolveSyncRejects({
+      siteId: scope.siteId as number,
+      entityType: entityType || undefined,
+    }),
+    onSuccess: (res) => {
+      setBulkMsg(`${res?.resolved ?? 0} rejet(s) résolu(s) (donnée retrouvée sur le hub).`);
+      qc.invalidateQueries({ queryKey: ['sync-rejects'] });
+      qc.invalidateQueries({ queryKey: ['sync-rejects-counts'] });
+    },
+    onError: (e) => setBulkMsg((e as Error).message),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -474,10 +491,27 @@ function RejectsTable({ scope }: Readonly<{ scope: GeoScope }>) {
                 className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white">
           {ENTITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <button
+          onClick={() => { setBulkMsg(null); bulk.mutate(); }}
+          disabled={!scope.siteId || bucket !== 'open' || bulk.isPending}
+          title={!scope.siteId
+            ? 'Sélectionne un site (filtre géo) pour résoudre en masse'
+            : 'Marque résolus les rejets dont la donnée est désormais présente sur le hub'}
+          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 text-emerald-700
+                     px-3 py-2 text-sm hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          <CheckCircle2 className="h-4 w-4" />
+          {bulk.isPending ? 'Résolution…' : 'Résoudre en masse'}
+        </button>
         <span className="text-xs text-ink-muted ml-auto">
           {rejects.data ? `${formatInt(rejects.data.total)} rejets` : '—'}
         </span>
       </div>
+
+      {bulkMsg && (
+        <p className="mb-3 text-xs rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-2">
+          {bulkMsg}
+        </p>
+      )}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
