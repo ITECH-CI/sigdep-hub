@@ -31,8 +31,17 @@ spring:
       mail:
         smtp:
           auth: ${SIGDEP_MAIL_SMTP_AUTH:true}
+          # STARTTLS (port 587, défaut) — passer à false si SSL implicite.
           starttls:
             enable: ${SIGDEP_MAIL_STARTTLS:true}
+          # SSL implicite (port 465) — mettre SIGDEP_MAIL_SSL=true et
+          # SIGDEP_MAIL_STARTTLS=false pour les serveurs type cPanel.
+          ssl:
+            enable: ${SIGDEP_MAIL_SSL:false}
+            # Au besoin, faire confiance au certificat du serveur SMTP
+            # (ex. certificat auto-signé d'un relais mutualisé) : y mettre
+            # le host SMTP, ou "*" pour tout accepter.
+            trust: ${SIGDEP_MAIL_SSL_TRUST:}
 app:
   jwt:
     # Clé symétrique HS256 — DOIT faire >= 32 octets. En prod, fournir

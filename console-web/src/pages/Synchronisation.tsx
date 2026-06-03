@@ -27,6 +27,11 @@ const ENTITY_OPTIONS: { value: string; label: string }[] = [
   { value: 'lab_results',            label: 'Examens biologiques' },
   { value: 'tpt_records',            label: 'TPT' },
   { value: 'dispensations',          label: 'Dispensations' },
+  { value: 'screenings',             label: 'Dépistage' },
+  { value: 'ptme_mothers',           label: 'PTME — mères' },
+  { value: 'ptme_mother_visits',     label: 'PTME — visites mères' },
+  { value: 'ptme_children',          label: 'PTME — enfants' },
+  { value: 'ptme_child_visits',      label: 'PTME — visites enfants' },
 ];
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [

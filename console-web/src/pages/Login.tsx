@@ -100,17 +100,9 @@ export function Login() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label htmlFor="password" className="block text-sm font-medium">
-                      Mot de passe
-                    </label>
-                    <Link
-                      to="/mot-de-passe-oublie"
-                      className="text-xs text-sigdep-700 hover:underline"
-                    >
-                      Mot de passe oublié ?
-                    </Link>
-                  </div>
+                  <label htmlFor="password" className="block text-sm font-medium mb-1">
+                    Mot de passe
+                  </label>
                   <PasswordInput
                     id="password"
                     autoComplete="current-password"
@@ -118,6 +110,14 @@ export function Login() {
                     value={password}
                     onChange={setPassword}
                   />
+                  <div className="mt-1.5 text-right">
+                    <Link
+                      to="/mot-de-passe-oublie"
+                      className="text-xs text-sigdep-700 hover:underline"
+                    >
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
                 </div>
 
                 {error && (

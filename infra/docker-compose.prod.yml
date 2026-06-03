@@ -48,6 +48,9 @@ services:
       SIGDEP_MAIL_PORT:                ${SIGDEP_MAIL_PORT:-587}
       SIGDEP_MAIL_USERNAME:            ${SIGDEP_MAIL_USERNAME:-}
       SIGDEP_MAIL_PASSWORD:            ${SIGDEP_MAIL_PASSWORD:-}
+      # Chiffrement : STARTTLS (587, défaut) ou SSL implicite (465).
+      SIGDEP_MAIL_STARTTLS:            ${SIGDEP_MAIL_STARTTLS:-true}
+      SIGDEP_MAIL_SSL:                 ${SIGDEP_MAIL_SSL:-false}
     depends_on: [postgres]
 
   ingestion-api:
