@@ -19,8 +19,13 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:-sigdep}
       POSTGRES_USER:     ${POSTGRES_USER:-sigdep}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      # Rôle lecture seule pour Superset, créé au 1er boot (si mot de passe fourni).
+      SUPERSET_DB_READONLY_USER:     ${SUPERSET_DB_READONLY_USER:-superset_ro}
+      SUPERSET_DB_READONLY_PASSWORD: ${SUPERSET_DB_READONLY_PASSWORD:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Script init exécuté UNE FOIS au premier boot (volume vierge).
+      - ./postgres/01-init-superset-readonly.sh:/docker-entrypoint-initdb.d/01-init-superset-readonly.sh:ro
     # No host port exposed in prod — DB is reached over the compose network.
 
   console-api:
@@ -70,6 +75,40 @@ services:
     # Pas de port host exposé : le nginx front est seul à sortir sur
     # 443. console-web ne répond qu'au réseau interne du compose.
 
+  # Apache Superset — « Analyses avancées ». Login séparé (pas de SSO en
+  # phase 1). Métadonnées Superset persistées dans un volume (SQLite par
+  # défaut). À connecter à la base SIGDEP via le rôle lecture seule
+  # superset_ro (URI : postgresql://superset_ro:<pwd>@postgres:5432/sigdep).
+  superset:
+    image: apache/superset:4.1.1
+    container_name: sigdep-superset
+    environment:
+      # Clé secrète Superset — OBLIGATOIRE, à générer (openssl rand -base64 42).
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change-me-superset-secret-key}
+      # Compte admin Superset créé au 1er boot.
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      SUPERSET_ADMIN_EMAIL:    ${SUPERSET_ADMIN_EMAIL:-admin@sigdep.example.org}
+      # Servi derrière nginx sous le sous-chemin /analytics (cf. nginx.prod.conf).
+      SUPERSET_APP_ROOT:       /analytics
+      ENABLE_PROXY_FIX:        "true"
+    # Bootstrap : upgrade DB métadonnées + crée l'admin + init rôles, puis lance.
+    command: >
+      bash -c "
+      superset db upgrade &&
+      superset fab create-admin
+        --username \"$${SUPERSET_ADMIN_USERNAME}\"
+        --firstname Admin --lastname SIGDEP
+        --email \"$${SUPERSET_ADMIN_EMAIL}\"
+        --password \"$${SUPERSET_ADMIN_PASSWORD}\" || true &&
+      superset init &&
+      gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'
+      "
+    volumes:
+      - superset_home:/app/superset_home
+    depends_on: [postgres]
+    # Pas de port host exposé : le nginx front route /analytics/ → superset:8088.
+
   nginx:
     image: nginx:1.27-alpine
     container_name: sigdep-nginx
@@ -85,3 +124,4 @@ services:
 
 volumes:
   postgres_data:
+  superset_home:

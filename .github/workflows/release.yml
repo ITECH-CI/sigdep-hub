@@ -155,6 +155,11 @@ jobs:
           context: console-web
           file: console-web/Dockerfile
           push: true
+          # VITE_SUPERSET_URL est inliné dans le bundle au build. Définir la
+          # variable de dépôt VITE_SUPERSET_URL (ex. https://<host>/analytics/)
+          # pour activer le menu « Analyses avancées » ; vide → menu masqué.
+          build-args: |
+            VITE_SUPERSET_URL=${{ vars.VITE_SUPERSET_URL }}
           tags: |
             ${{ steps.registry.outputs.registry }}/sigdep-console-web:${{ steps.tag.outputs.version }}
             ${{ steps.registry.outputs.registry }}/sigdep-console-web:latest
