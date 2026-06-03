@@ -9,6 +9,7 @@ import { Search, ShieldCheck, UserPlus } from 'lucide-react';
 import { formatInt } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { PasswordInput } from '../components/PasswordInput';
+import { Combobox } from '../components/Combobox';
 import { TableSkeleton } from '../components/Skeleton';
 
 function formatTimestamp(ms: number | null): string {
@@ -299,12 +300,7 @@ function RoleAndScopePicker({
     <>
       <Field label="Rôle">
         <select className={inputClass} value={role}
-                onChange={e => {
-                  const next = e.target.value;
-                  onRoleChange(next);
-                  // Changer de rôle réinitialise la portée.
-                  onScopeChange({ regionId: null, districtId: null, siteId: null });
-                }}>
+                onChange={e => onRoleChange(e.target.value)}>
           <option value="">— Choisir un rôle —</option>
           {roles.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
@@ -317,50 +313,34 @@ function RoleAndScopePicker({
           </p>
 
           <Field label="Région">
-            <select className={inputClass}
-                    value={scope.regionId ?? ''}
-                    onChange={e => {
-                      const v = e.target.value ? Number(e.target.value) : null;
-                      onScopeChange({ regionId: v, districtId: null, siteId: null });
-                    }}>
-              <option value="">— Choisir —</option>
-              {regions.data?.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
+            <Combobox
+              options={(regions.data ?? []).map(r => ({ value: r.id, label: r.name }))}
+              value={scope.regionId}
+              onChange={v => onScopeChange({ regionId: v, districtId: null, siteId: null })}
+            />
           </Field>
 
           {(activeScoped === 'district' || activeScoped === 'site') && (
             <Field label="District">
-              <select className={inputClass}
-                      value={scope.districtId ?? ''}
-                      disabled={scope.regionId == null}
-                      onChange={e => {
-                        const v = e.target.value ? Number(e.target.value) : null;
-                        onScopeChange({ regionId: scope.regionId, districtId: v, siteId: null });
-                      }}>
-                <option value="">{scope.regionId == null ? 'Choisis d\'abord une région' : '— Choisir —'}</option>
-                {districts.data?.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+              <Combobox
+                options={(districts.data ?? []).map(d => ({ value: d.id, label: d.name }))}
+                value={scope.districtId}
+                disabled={scope.regionId == null}
+                placeholder={scope.regionId == null ? "Choisis d'abord une région" : '— Choisir —'}
+                onChange={v => onScopeChange({ regionId: scope.regionId, districtId: v, siteId: null })}
+              />
             </Field>
           )}
 
           {activeScoped === 'site' && (
             <Field label="Site">
-              <select className={inputClass}
-                      value={scope.siteId ?? ''}
-                      disabled={scope.districtId == null}
-                      onChange={e => {
-                        const v = e.target.value ? Number(e.target.value) : null;
-                        onScopeChange({ regionId: scope.regionId, districtId: scope.districtId, siteId: v });
-                      }}>
-                <option value="">{scope.districtId == null ? 'Choisis d\'abord un district' : '— Choisir —'}</option>
-                {sites.data?.map(s => (
-                  <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
-                ))}
-              </select>
+              <Combobox
+                options={(sites.data ?? []).map(s => ({ value: s.id, label: `${s.code} — ${s.name}` }))}
+                value={scope.siteId}
+                disabled={scope.districtId == null}
+                placeholder={scope.districtId == null ? "Choisis d'abord un district" : '— Choisir —'}
+                onChange={v => onScopeChange({ regionId: scope.regionId, districtId: scope.districtId, siteId: v })}
+              />
             </Field>
           )}
         </div>
@@ -464,9 +444,9 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
       <RoleAndScopePicker
         roles={roles.data ?? []}
         role={form.role}
-        onRoleChange={role => setForm({ ...form, role })}
+        onRoleChange={role => setForm(f => ({ ...f, role, regionId: null, districtId: null, siteId: null }))}
         scope={scope}
-        onScopeChange={s => setForm({ ...form, regionId: s.regionId, districtId: s.districtId, siteId: s.siteId })}
+        onScopeChange={s => setForm(f => ({ ...f, regionId: s.regionId, districtId: s.districtId, siteId: s.siteId }))}
       />
       {form.role !== '' && !scopeOk && (
         <p className="text-rose-600 text-xs">Sélectionne la zone correspondant au rôle géographique.</p>
@@ -550,9 +530,9 @@ function EditModal({ userId, onClose, onDone }:
           <RoleAndScopePicker
             roles={roles.data ?? []}
             role={form.role ?? ''}
-            onRoleChange={role => setForm({ ...form, role })}
+            onRoleChange={role => setForm(f => f && ({ ...f, role, regionId: null, districtId: null, siteId: null }))}
             scope={scope}
-            onScopeChange={s => setForm({ ...form, regionId: s.regionId, districtId: s.districtId, siteId: s.siteId })}
+            onScopeChange={s => setForm(f => f && ({ ...f, regionId: s.regionId, districtId: s.districtId, siteId: s.siteId }))}
           />
           {!scopeOk && (
             <p className="text-rose-600 text-xs">Sélectionne la zone correspondant au rôle géographique.</p>
