@@ -4,6 +4,8 @@ import { AppLayout } from "./components/AppLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { Landing } from "./pages/Landing";
 import { Login } from "./pages/Login";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { SetPassword } from "./pages/SetPassword";
 import { PatientDetail } from "./pages/PatientDetail";
 import { Patients } from "./pages/Patients";
 import { Sites } from "./pages/Sites";
@@ -24,6 +26,8 @@ export function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/public" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
+      <Route path="/definir-mot-de-passe" element={<SetPassword />} />
 
       {/* Authenticated app — /app/* */}
       <Route

@@ -8,6 +8,7 @@ import {
 import { Search, ShieldCheck, UserPlus } from 'lucide-react';
 import { formatInt } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
+import { PasswordInput } from '../components/PasswordInput';
 import { TableSkeleton } from '../components/Skeleton';
 
 function formatTimestamp(ms: number | null): string {
@@ -366,15 +367,24 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
     regionId: null, districtId: null, siteId: null,
   });
   const [confirmPassword, setConfirmPassword] = useState('');
+  // 'link' = l'utilisateur reçoit un email pour définir son mot de passe ;
+  // 'manual' = l'admin définit un mot de passe initial.
+  const [mode, setMode] = useState<'link' | 'manual'>('link');
   const roles = useQuery({ queryKey: ['user-roles'], queryFn: fetchUserRoles });
-  const m = useMutation({ mutationFn: () => createUser(form), onSuccess: onDone });
+  // En mode lien, on n'envoie PAS de mot de passe → le backend envoie l'email.
+  const m = useMutation({
+    mutationFn: () => createUser(mode === 'link'
+      ? { ...form, password: undefined, passwordTemporary: undefined }
+      : form),
+    onSuccess: onDone,
+  });
 
   const scope: ScopeState = {
     regionId: form.regionId ?? null,
     districtId: form.districtId ?? null,
     siteId: form.siteId ?? null,
   };
-  const passwordOk = !!form.password && form.password === confirmPassword;
+  const passwordOk = mode === 'link' || (!!form.password && form.password === confirmPassword);
   const scopeOk = scopeIsValid(form.role, scope);
   const canSubmit = !!form.email && !!form.role && passwordOk && scopeOk && !m.isPending;
 
@@ -397,22 +407,43 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
         <input className={inputClass} value={form.displayName ?? ''}
                onChange={e => setForm({ ...form, displayName: e.target.value })} />
       </Field>
-      <Field label="Mot de passe initial">
-        <input className={inputClass} type="text" value={form.password ?? ''}
-               onChange={e => setForm({ ...form, password: e.target.value })} />
-      </Field>
-      <Field label="Confirmer le mot de passe">
-        <input className={inputClass} type="text" value={confirmPassword}
-               onChange={e => setConfirmPassword(e.target.value)} />
-      </Field>
-      {form.password && !passwordOk && (
-        <p className="text-rose-600 text-xs">Les mots de passe ne correspondent pas.</p>
-      )}
-      <label className="flex items-center gap-2 text-xs">
-        <input type="checkbox" checked={form.passwordTemporary ?? true}
-               onChange={e => setForm({ ...form, passwordTemporary: e.target.checked })} />
-        Mot de passe temporaire (l'utilisateur devra le changer)
-      </label>
+      <div className="rounded-md border border-slate-200 p-3 space-y-2">
+        <p className="text-xs font-medium text-ink-muted">Mot de passe</p>
+        <label className="flex items-start gap-2 text-xs cursor-pointer">
+          <input type="radio" name="pwd-mode" checked={mode === 'link'}
+                 onChange={() => setMode('link')} className="mt-0.5" />
+          <span>
+            <span className="font-medium">Envoyer un lien par email</span> — l'utilisateur
+            définit lui-même son mot de passe (recommandé). Nécessite un email valide.
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-xs cursor-pointer">
+          <input type="radio" name="pwd-mode" checked={mode === 'manual'}
+                 onChange={() => setMode('manual')} className="mt-0.5" />
+          <span className="font-medium">Définir un mot de passe initial maintenant</span>
+        </label>
+
+        {mode === 'manual' && (
+          <div className="space-y-2 pt-1">
+            <Field label="Mot de passe initial">
+              <PasswordInput autoComplete="new-password" value={form.password ?? ''}
+                             onChange={v => setForm({ ...form, password: v })} />
+            </Field>
+            <Field label="Confirmer le mot de passe">
+              <PasswordInput autoComplete="new-password" value={confirmPassword}
+                             onChange={setConfirmPassword} />
+            </Field>
+            {form.password && !passwordOk && (
+              <p className="text-rose-600 text-xs">Les mots de passe ne correspondent pas.</p>
+            )}
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={form.passwordTemporary ?? true}
+                     onChange={e => setForm({ ...form, passwordTemporary: e.target.checked })} />
+              Mot de passe temporaire (l'utilisateur devra le changer)
+            </label>
+          </div>
+        )}
+      </div>
       <RoleAndScopePicker
         roles={roles.data ?? []}
         role={form.role}
@@ -522,12 +553,10 @@ function PasswordModal({ userId, email, onClose }:
         </button>
       </>}>
       <Field label="Nouveau mot de passe">
-        <input className={inputClass} type="text" value={password}
-               onChange={e => setPassword(e.target.value)} />
+        <PasswordInput autoComplete="new-password" value={password} onChange={setPassword} />
       </Field>
       <Field label="Confirmer le mot de passe">
-        <input className={inputClass} type="text" value={confirm}
-               onChange={e => setConfirm(e.target.value)} />
+        <PasswordInput autoComplete="new-password" value={confirm} onChange={setConfirm} />
       </Field>
       {password && !passwordOk && (
         <p className="text-rose-600 text-xs">Les mots de passe ne correspondent pas.</p>
