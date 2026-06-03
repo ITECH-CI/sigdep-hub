@@ -3,6 +3,47 @@
 Le format suit [Keep a Changelog](https://keepachangelog.com/) et la
 plateforme adhère à [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] — non publié
+
+### Changé — migration de l'authentification : Keycloak → Spring Security + JWT
+
+Keycloak accumulait trop de friction pour un cas d'usage à une seule
+application (redirect URIs à patcher, realm à importer, base/user
+dédiés, bouton « Se connecter » capricieux). L'auth est désormais
+intégrée au hub, sans serveur d'identité séparé.
+
+- **Auth console** : Spring Security pur + JWT **HS256** (clé symétrique
+  en `.env`). Login par email/mot de passe (`POST /api/auth/login`),
+  access token 1h + refresh token opaque 7j (rotation à chaque refresh,
+  stocké en base `auth.refresh_tokens`). Endpoints `/api/auth/*`
+  (`login`, `me`, `refresh`, `logout`).
+- **Auth agent** : clé API opaque par site (en-tête `X-API-Key`,
+  hash BCrypt en base `auth.api_keys`) en remplacement du bearer OAuth.
+  Génération/révocation depuis la console (page **Sites**).
+- **Modèle de comptes** : un compte = un email + un rôle unique parmi
+  les 8 rôles + un niveau (`NATIONAL`/`REGION`/`DISTRICT`/`SITE`) + au
+  plus une portée géo. Table `auth.users` (BCrypt) + `auth.user_geo_scope`.
+- **Seed initial** : compte SUPER_ADMIN créé au premier boot via
+  `SIGDEP_ADMIN_EMAIL` / `SIGDEP_ADMIN_PASSWORD` si `auth.users` est vide.
+- **Schéma DB** : nouveau schéma `auth` (changesets Liquibase 035-038).
+- **SPA** : `react-oidc-context` retiré ; nouvelle page de login, contexte
+  d'auth JWT (localStorage), intercepteur 401 → refresh → retry.
+
+### Retiré
+
+- Service `keycloak` des `docker-compose` (dev + prod), `infra/keycloak/`,
+  `infra/postgres/01-init-keycloak.sh`, routes nginx `/realms`, `/admin`…
+- `KeycloakAdminService` / `KeycloakAdminConfig`, dépendances
+  `keycloak-admin-client` et `spring-boot-starter-oauth2-resource-server`.
+- Variables d'environnement `KEYCLOAK_*` / `KC_*` (hub et agent).
+
+### Migration
+
+Aucune migration de données : on repart d'une base vierge pour le pilote
+(pas d'utilisateurs Keycloak à reprendre). Fournir `SIGDEP_JWT_SECRET`
+(≥ 32 octets) et `SIGDEP_ADMIN_EMAIL` / `SIGDEP_ADMIN_PASSWORD` au premier
+démarrage ; régénérer les clés API des sites depuis la console.
+
 ## [1.0.4] — 2026-05-24
 
 ### Corrigé — déploiement pilote v1.0.3 inutilisable hors environnement de build

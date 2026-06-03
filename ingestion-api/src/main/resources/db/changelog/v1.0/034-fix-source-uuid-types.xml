@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+      Corrige le type de core.districts.source_uuid et core.sites.source_uuid
+      de CHAR(38) (bpchar côté Postgres) vers VARCHAR(38) pour s'aligner sur
+      l'entité JPA (String + length=38 ⇒ VARCHAR).
+
+      Sans ce fix, Hibernate refuse de démarrer en mode schema validation :
+        Schema-validation: wrong column type encountered in column [source_uuid]
+        in table [core.districts]; found [bpchar (Types#CHAR)], but expecting
+        [varchar(38) (Types#VARCHAR)]
+
+      Bases vierges (≥ v1.0.5) : changesets 003 et 004 créent déjà VARCHAR(38),
+      ce changeset est alors un no-op (les ALTER ne changent rien).
+
+      Bases existantes (v1.0.0 → v1.0.4) : ce changeset rebascule les
+      colonnes en VARCHAR(38) et résout le crash console-api.
+    -->
+
+    <changeSet id="034-fix-districts-source-uuid" author="pkomena">
+        <modifyDataType tableName="districts" schemaName="core"
+                        columnName="source_uuid" newDataType="VARCHAR(38)"/>
+    </changeSet>
+
+    <changeSet id="034-fix-sites-source-uuid" author="pkomena">
+        <modifyDataType tableName="sites" schemaName="core"
+                        columnName="source_uuid" newDataType="VARCHAR(38)"/>
+    </changeSet>
+
+</databaseChangeLog>

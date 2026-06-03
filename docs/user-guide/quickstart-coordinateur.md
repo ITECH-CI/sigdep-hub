@@ -8,12 +8,11 @@ Vous consultez les données, vous n'en saisissez pas.
 
 1. Ouvrez votre navigateur sur l'URL fournie par l'équipe SIGDEP
    (par exemple `https://sigdep.pnls.ci/` en production).
-2. Cliquez sur **Se connecter**. Vous êtes redirigé vers la page de
-   login Keycloak SIGDEP.
-3. Saisissez votre identifiant (email ou nom d'utilisateur) et votre
-   mot de passe, puis validez.
-4. Si c'est votre première connexion, Keycloak peut vous demander de
-   changer votre mot de passe. Faites-le immédiatement.
+2. Cliquez sur **Se connecter**. La page de connexion SIGDEP s'affiche.
+3. Saisissez votre **adresse e-mail** et votre mot de passe, puis
+   validez.
+4. Si votre mot de passe est temporaire (première connexion), changez-le
+   immédiatement.
 
 À la fin, vous arrivez sur la **Vue d'ensemble** (Dashboard).
 

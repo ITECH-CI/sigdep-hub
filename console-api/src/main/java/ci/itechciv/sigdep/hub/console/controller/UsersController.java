@@ -1,11 +1,11 @@
 package ci.itechciv.sigdep.hub.console.controller;
 
-import ci.itechciv.sigdep.hub.console.admin.KeycloakAdminService;
-import ci.itechciv.sigdep.hub.console.admin.KeycloakAdminService.CreateUserRequest;
-import ci.itechciv.sigdep.hub.console.admin.KeycloakAdminService.ResetPasswordRequest;
-import ci.itechciv.sigdep.hub.console.admin.KeycloakAdminService.UpdateUserRequest;
-import ci.itechciv.sigdep.hub.console.admin.KeycloakAdminService.UserDetail;
-import ci.itechciv.sigdep.hub.console.admin.KeycloakAdminService.UserPage;
+import ci.itechciv.sigdep.hub.console.admin.UserAdminService;
+import ci.itechciv.sigdep.hub.console.admin.UserAdminService.CreateUserRequest;
+import ci.itechciv.sigdep.hub.console.admin.UserAdminService.ResetPasswordRequest;
+import ci.itechciv.sigdep.hub.console.admin.UserAdminService.UpdateUserRequest;
+import ci.itechciv.sigdep.hub.console.admin.UserAdminService.UserDetail;
+import ci.itechciv.sigdep.hub.console.admin.UserAdminService.UserPage;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -22,22 +22,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Console-side admin endpoints for the Keycloak realm. All actions go through
- * a service-account ("sigdep-console-admin" client) configured via
- * {@code app.keycloak.*}; no end-user credentials are needed beyond the
- * console JWT used to call these endpoints.
+ * Endpoints d'administration des comptes utilisateurs (auth v2.0, JPA).
+ * Remplace l'ancien CRUD adossé à Keycloak.
  *
- * Limited to SUPER_ADMIN / IT_ADMIN roles — others have no business creating
- * or disabling accounts.
+ * Réservé aux rôles SUPER_ADMIN / IT_ADMIN.
  */
 @RestController
 @RequestMapping("/api/v1/users")
 @PreAuthorize("hasAnyRole('SUPER_ADMIN','IT_ADMIN')")
 public class UsersController {
 
-    private final KeycloakAdminService service;
+    private final UserAdminService service;
 
-    public UsersController(KeycloakAdminService service) {
+    public UsersController(UserAdminService service) {
         this.service = service;
     }
 
@@ -55,45 +52,52 @@ public class UsersController {
     }
 
     @GetMapping("/{id}")
-    public UserDetail get(@PathVariable String id) {
+    public UserDetail get(@PathVariable Long id) {
         return service.get(id);
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, String>> create(@RequestBody CreateUserRequest req) {
-        String id = service.create(req);
+    public ResponseEntity<Map<String, Long>> create(@RequestBody CreateUserRequest req) {
+        Long id = service.create(req);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Void> update(@PathVariable String id,
+    public ResponseEntity<Void> update(@PathVariable Long id,
                                        @RequestBody UpdateUserRequest req) {
         service.update(id, req);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/password")
-    public ResponseEntity<Void> resetPassword(@PathVariable String id,
+    public ResponseEntity<Void> resetPassword(@PathVariable Long id,
                                               @RequestBody ResetPasswordRequest req) {
         service.resetPassword(id, req.password(), req.temporary());
         return ResponseEntity.noContent().build();
     }
 
+    /** Envoie un lien de réinitialisation à l'utilisateur (l'admin ne saisit rien). */
+    @PostMapping("/{id}/send-reset-link")
+    public ResponseEntity<Void> sendResetLink(@PathVariable Long id) {
+        service.sendResetLink(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{id}/enable")
-    public ResponseEntity<Void> enable(@PathVariable String id) {
+    public ResponseEntity<Void> enable(@PathVariable Long id) {
         service.setEnabled(id, true);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/disable")
-    public ResponseEntity<Void> disable(@PathVariable String id) {
+    public ResponseEntity<Void> disable(@PathVariable Long id) {
         service.setEnabled(id, false);
         return ResponseEntity.noContent().build();
     }
 
-    /** Disabling instead of deleting is the recommended Keycloak pattern. */
+    /** Désactivation (soft) plutôt que suppression : conserve l'historique. */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> softDelete(@PathVariable String id) {
+    public ResponseEntity<Void> softDelete(@PathVariable Long id) {
         service.setEnabled(id, false);
         return ResponseEntity.noContent().build();
     }

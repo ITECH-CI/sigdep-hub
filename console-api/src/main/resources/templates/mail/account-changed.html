@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr"
+      th:replace="~{mail/_layout :: html(subject='Votre compte SIGDEP-3 a été modifié', body=~{::body})}">
+<body th:fragment="body">
+  <h1 style="margin:0 0 16px; color:#0f172a; font-size:20px; font-weight:600;">
+    Modification de votre compte
+  </h1>
+  <p style="margin:0 0 16px; color:#334155; font-size:15px; line-height:1.6;">
+    Bonjour <span th:text="${displayName}">utilisateur</span>,
+  </p>
+  <p style="margin:0 0 16px; color:#334155; font-size:15px; line-height:1.6;">
+    Votre compte SIGDEP-3 (<span th:text="${email}">email</span>) vient d'être
+    modifié par un administrateur :
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+         style="margin:0 0 24px; background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+    <tr>
+      <td style="padding:14px 18px; color:#0f172a; font-size:14px; line-height:1.6;">
+        <span th:text="${changeSummary}">Détail de la modification.</span>
+      </td>
+    </tr>
+  </table>
+  <p style="margin:0; color:#64748b; font-size:13px; line-height:1.6;">
+    Si vous n'êtes pas à l'origine de cette modification ou si elle vous semble
+    suspecte, contactez immédiatement votre administrateur SIGDEP.
+  </p>
+</body>
+</html>

@@ -21,7 +21,7 @@
             <column name="name" type="VARCHAR(255)">
                 <constraints nullable="false"/>
             </column>
-            <column name="source_uuid" type="CHAR(38)">
+            <column name="source_uuid" type="VARCHAR(38)">
                 <constraints unique="true"/>
             </column>
             <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">

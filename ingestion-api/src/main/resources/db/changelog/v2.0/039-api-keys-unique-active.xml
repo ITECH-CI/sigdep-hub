@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      La clé API d'un site est rotatée : générer une nouvelle clé révoque
+      l'ancienne (revoked_at renseigné) sans la supprimer (audit). On veut donc
+      garder l'historique des clés révoquées tout en garantissant au plus UNE
+      clé active par site.
+
+      La contrainte UNIQUE absolue sur site_id (changeset 038) l'interdit : elle
+      bloque l'insert dès qu'une ligne existe, même révoquée. On la remplace
+      par un index UNIQUE partiel filtré sur les clés actives.
+    -->
+    <changeSet id="039-api-keys-drop-site-unique" author="itechciv" failOnError="true">
+        <dropUniqueConstraint
+                tableName="api_keys" schemaName="auth"
+                constraintName="api_keys_site_id_key"/>
+        <rollback>
+            <addUniqueConstraint
+                    tableName="api_keys" schemaName="auth"
+                    columnNames="site_id"
+                    constraintName="api_keys_site_id_key"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="039-api-keys-unique-active" author="itechciv" failOnError="true">
+        <sql>
+            CREATE UNIQUE INDEX ux_api_keys_active_site
+                ON auth.api_keys (site_id)
+                WHERE revoked_at IS NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS auth.ux_api_keys_active_site;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

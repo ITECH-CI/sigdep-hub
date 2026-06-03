@@ -20,22 +20,59 @@ spring:
     # Per-cache override is possible via `caffeine.spec` on a specific cache.
     caffeine:
       spec: maximumSize=2000,expireAfterWrite=60s
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # The issuer claim in the JWT is whatever Keycloak's KC_HOSTNAME
-          # advertises, i.e. localhost:9000 in dev (via the nginx proxy).
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:9000/realms/sigdep}
-
+  # SMTP — utilisé seulement quand app.mail.enabled=true. Sinon les emails
+  # sont logués en console (dev). Renseigner via SIGDEP_MAIL_* (.env).
+  mail:
+    host: ${SIGDEP_MAIL_HOST:localhost}
+    port: ${SIGDEP_MAIL_PORT:587}
+    username: ${SIGDEP_MAIL_USERNAME:}
+    password: ${SIGDEP_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SIGDEP_MAIL_SMTP_AUTH:true}
+          # STARTTLS (port 587, défaut) — passer à false si SSL implicite.
+          starttls:
+            enable: ${SIGDEP_MAIL_STARTTLS:true}
+          # SSL implicite (port 465) — mettre SIGDEP_MAIL_SSL=true et
+          # SIGDEP_MAIL_STARTTLS=false pour les serveurs type cPanel.
+          ssl:
+            enable: ${SIGDEP_MAIL_SSL:false}
+            # Au besoin, faire confiance au certificat du serveur SMTP
+            # (ex. certificat auto-signé d'un relais mutualisé) : y mettre
+            # le host SMTP, ou "*" pour tout accepter.
+            trust: ${SIGDEP_MAIL_SSL_TRUST:}
 app:
-  keycloak:
-    # The admin client talks to Keycloak directly (server-to-server, no
-    # proxy), so it stays on the container port 8180.
-    server-url: ${KEYCLOAK_SERVER_URL:http://localhost:8180}
-    realm: ${KEYCLOAK_REALM:sigdep}
-    admin-client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:sigdep-console-admin}
-    admin-client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:console-admin-dev-secret-change-me}
+  jwt:
+    # Clé symétrique HS256 — DOIT faire >= 32 octets. En prod, fournir
+    # SIGDEP_JWT_SECRET via .env (jamais committée). Le défaut ci-dessous
+    # n'est là que pour le dev local.
+    secret: ${SIGDEP_JWT_SECRET:dev-only-insecure-secret-change-me-32bytes-minimum!!}
+    issuer: ${SIGDEP_JWT_ISSUER:sigdep-hub}
+    access-ttl: ${SIGDEP_JWT_ACCESS_TTL:PT1H}
+    refresh-ttl: ${SIGDEP_JWT_REFRESH_TTL:P7D}
+  # Comptes d'administration seedés au démarrage (AdminSeeder), idempotents
+  # par email. En prod, surcharger via le .env ET CHANGER les mots de passe
+  # par défaut. Laisser un mot de passe vide désactive le seed de ce compte.
+  admin:
+    email: ${SIGDEP_ADMIN_EMAIL:admin@sigdep.ci}
+    password: ${SIGDEP_ADMIN_PASSWORD:ChangeMe2026!}
+    display-name: ${SIGDEP_ADMIN_NAME:Super Administrateur SIGDEP}
+  it-admin:
+    email: ${SIGDEP_IT_ADMIN_EMAIL:it-admin@sigdep.ci}
+    password: ${SIGDEP_IT_ADMIN_PASSWORD:ChangeMe2026!}
+    display-name: ${SIGDEP_IT_ADMIN_NAME:Administrateur Technique SIGDEP}
+  # URL publique du front, utilisée pour construire les liens dans les emails
+  # (réinitialisation / définition de mot de passe).
+  public-url: ${SIGDEP_PUBLIC_URL:http://localhost:9000}
+  mail:
+    # false (défaut) → les emails sont LOGUÉS en console au lieu d'être
+    # envoyés. Passer à true une fois le SMTP (spring.mail.*) configuré.
+    enabled: ${SIGDEP_MAIL_ENABLED:false}
+    from: ${SIGDEP_MAIL_FROM:SIGDEP-3 <no-reply@sigdep.ci>}
+    # TTL des liens : reset court, définition initiale (bienvenue) plus long.
+    reset-ttl: ${SIGDEP_MAIL_RESET_TTL:PT1H}
+    welcome-ttl: ${SIGDEP_MAIL_WELCOME_TTL:PT72H}
   web:
     resources:
       static-locations: classpath:/static/

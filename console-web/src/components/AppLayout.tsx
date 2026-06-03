@@ -1,12 +1,11 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "react-oidc-context";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  Activity, BarChart3, BookOpenCheck, Building2, ChevronLeft, ChevronRight,
+  Activity, BarChart3, BookOpenCheck, Building2, ChevronDown, ChevronLeft, ChevronRight,
   LayoutDashboard, LogOut, Menu, Microscope, Pill, RefreshCcw,
-  ShieldCheck, Stethoscope, Syringe, Users, type LucideIcon,
+  ShieldCheck, Stethoscope, Syringe, UserCog, Users, type LucideIcon,
 } from "lucide-react";
-import { getAccessToken } from "../auth";
+import { useAuth } from "../auth";
 import { GlobalLoader } from "./GlobalLoader";
 
 type NavItem = {
@@ -59,28 +58,6 @@ const NAV: NavGroup[] = [
   },
 ];
 
-/**
- * Realm roles live in the *access* token's `realm_access.roles` claim — the
- * ID token (= `user.profile`) doesn't carry them by default in Keycloak. We
- * therefore decode the access token here rather than read the OIDC profile.
- */
-function realmRolesFromAccessToken(): Set<string> {
-  const token = getAccessToken();
-  if (!token) return new Set();
-  const parts = token.split(".");
-  if (parts.length < 2) return new Set();
-  try {
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const pad = b64.length % 4 === 0 ? b64 : b64 + "=".repeat(4 - (b64.length % 4));
-    const payload = JSON.parse(atob(pad)) as { realm_access?: { roles?: unknown } };
-    const roles = payload.realm_access?.roles;
-    if (!Array.isArray(roles)) return new Set();
-    return new Set(roles.filter((r): r is string => typeof r === "string"));
-  } catch {
-    return new Set();
-  }
-}
-
 function initials(name: string | undefined): string {
   if (!name) return "·";
   const parts = name.trim().split(/\s+/);
@@ -90,14 +67,28 @@ function initials(name: string | undefined): string {
 const COLLAPSE_KEY = "sigdep:sidebarCollapsed";
 
 export function AppLayout() {
-  const auth = useAuth();
-  const profile = auth.user?.profile;
-  const displayName =
-    profile?.name ??
-    [profile?.given_name, profile?.family_name].filter(Boolean).join(" ") ??
-    profile?.preferred_username ??
-    "—";
-  const roles = realmRolesFromAccessToken();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const displayName = user?.displayName ?? "—";
+  // En v2.0 chaque compte porte un seul rôle (claim `role` du JWT).
+  const roles = new Set(user?.role ? [user.role] : []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
+
+  // Menu utilisateur (sous le nom) : Mon profil / Déconnexion.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
 
   // Persist the collapse preference; auto-collapse on narrow viewports.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -180,19 +171,38 @@ export function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-muted hidden sm:inline">{displayName}</span>
-            <div className="h-8 w-8 rounded-full bg-sigdep-100 text-sigdep-700 flex items-center
-                            justify-center text-xs font-semibold uppercase">
-              {initials(displayName)}
-            </div>
+          <div ref={menuRef} className="relative">
             <button
-              onClick={() => auth.signoutRedirect()}
-              title="Déconnexion"
-              className="p-1.5 rounded-md hover:bg-slate-100 text-ink-muted hover:text-rose-600 transition"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100 transition"
             >
-              <LogOut className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-full bg-sigdep-100 text-sigdep-700 flex items-center
+                              justify-center text-xs font-semibold uppercase">
+                {initials(displayName)}
+              </div>
+              <span className="text-sm text-ink-muted hidden sm:inline">{displayName}</span>
+              <ChevronDown className="h-4 w-4 text-ink-subtle" />
             </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 mt-1 w-52 rounded-md border border-slate-200 bg-white shadow-lg py-1 z-50">
+                <Link
+                  to="/app/profil"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-slate-50"
+                >
+                  <UserCog className="h-4 w-4 text-ink-muted" />
+                  Mon profil
+                </Link>
+                <button
+                  onClick={() => { setMenuOpen(false); handleLogout(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-slate-50 hover:text-rose-600"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Déconnexion
+                </button>
+              </div>
+            )}
           </div>
         </header>
         <main className="flex-1 overflow-y-auto">

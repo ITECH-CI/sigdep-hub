@@ -1,0 +1,11 @@
+SIGDEP-3 — Mot de passe modifié
+
+Bonjour [(${displayName})],
+
+Le mot de passe de votre compte SIGDEP-3 ([(${email})]) vient d'être
+modifié avec succès. Toutes vos sessions actives ont été déconnectées.
+
+Si vous n'êtes pas à l'origine de cette modification, votre compte est
+peut-être compromis : contactez immédiatement votre administrateur SIGDEP.
+
+— SIGDEP-3 · PNLS Côte d'Ivoire

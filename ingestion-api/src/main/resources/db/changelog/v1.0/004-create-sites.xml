@@ -28,7 +28,7 @@
             <column name="latitude" type="DOUBLE PRECISION"/>
             <column name="longitude" type="DOUBLE PRECISION"/>
             <column name="active" type="BOOLEAN" defaultValueBoolean="true"/>
-            <column name="source_uuid" type="CHAR(38)"
+            <column name="source_uuid" type="VARCHAR(38)"
                     remarks="OpenMRS location.uuid (nullable for sites not yet in SIGDEP-3)">
                 <constraints unique="true"/>
             </column>

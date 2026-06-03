@@ -7,13 +7,13 @@ on commands you actually type.
 ## Starting and stopping the stack
 
 ```bash
-# Start: postgres + keycloak + nginx all in one go
+# Start: postgres + nginx
 cd infra && docker compose up -d
 
 # Stop everything (state preserved)
 cd infra && docker compose down
 
-# Nuke state — DB + Keycloak realm are reset on next `up`
+# Nuke state — la base (données + comptes) est réinitialisée au prochain `up`
 cd infra && docker compose down -v
 ```
 
@@ -30,57 +30,47 @@ Once infra is up, the three Spring Boot / Vite processes run on the host
 and reinstalls `core-domain` first). `run.sh` without `--dev` runs the
 packaged JAR — closer to prod.
 
-## Keycloak — kcadm.sh recipes
+## Comptes & authentification (auth v2.0)
 
-The realm import in `docker-compose.yml` only bootstraps `realm-sigdep.json`.
-A few things are applied **once** by hand after the realm exists:
+L'auth est gérée par console-api (Spring Security + JWT). Tout passe par
+la base `auth.*` ; aucun outil externe (plus de `kcadm.sh`).
 
-### Apply the user-profile (custom attributes regionId/districtId/siteId)
+### Premier compte (seed)
 
-Keycloak 25 silently drops user attributes that aren't declared in the
-user-profile. This is a known footgun we hit during build-up.
+Au premier boot, si `auth.users` est vide, console-api crée le
+SUPER_ADMIN à partir de `SIGDEP_ADMIN_EMAIL` / `SIGDEP_ADMIN_PASSWORD`.
+La suite se gère depuis la page **Utilisateurs** (`/app/users`).
 
-```bash
-docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://localhost:8080 --realm master --user admin --password admin
-
-docker cp infra/keycloak/extras/userprofile-sigdep.json \
-  sigdep-keycloak:/tmp/userprofile-sigdep.json
-
-docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh update users/profile \
-  -r sigdep -f /tmp/userprofile-sigdep.json
-```
-
-### Inspect a user’s attributes
-
-`--fields attributes` truncates them; use the user’s full URL to see
-them:
+### Inspecter les comptes en base
 
 ```bash
-SITE_USER_ID=$(docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh get users \
-  -r sigdep -q username=site-user --fields id --format csv --noquotes | tail -1)
+docker exec sigdep-postgres psql -U sigdep -d sigdep -c \
+  "SELECT id, email, role, user_level, active FROM auth.users ORDER BY id;"
 
-docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh get "users/$SITE_USER_ID" \
-  -r sigdep | python3 -m json.tool
+# Portée géo d'un utilisateur
+docker exec sigdep-postgres psql -U sigdep -d sigdep -c \
+  "SELECT * FROM auth.user_geo_scope WHERE user_id = 1;"
 ```
 
-### Grant a user a geographic scope (one-off)
+### Débloquer / réinitialiser
 
-Easier from the console (`/app/users`), but if you need to script it:
+La création, le changement de rôle/portée et le reset de mot de passe se
+font depuis la page Utilisateurs. En dépannage, on peut forcer un
+mot de passe via l'API (`POST /api/v1/users/{id}/password`) avec un JWT
+SUPER_ADMIN, ou réactiver un compte (`active = true`).
+
+### Clés API des agents
+
+Génération / révocation depuis la page **Sites** (bouton « Gérer »).
+État en base :
 
 ```bash
-docker exec sigdep-keycloak /opt/keycloak/bin/kcadm.sh update "users/$SITE_USER_ID" \
-  -r sigdep \
-  -s 'attributes.regionId=["32"]' \
-  -s 'attributes.districtId=["110"]' \
-  -s 'attributes.siteId=["7098"]'
+docker exec sigdep-postgres psql -U sigdep -d sigdep -c \
+  "SELECT site_id, key_prefix, created_at, last_used_at, revoked_at FROM auth.api_keys;"
 ```
 
-### Reset the admin session
-
-`kcadm.sh` tokens expire after a few minutes. If you see
-`Session has expired`, just `config credentials` again with the same
-flags as above.
+Le UUID en clair n'est jamais stocké — s'il est perdu, régénérer une clé
+(l'ancienne est révoquée automatiquement).
 
 ## Liquibase / database
 
@@ -143,29 +133,29 @@ the request is rejected *before* `AuthScope` even runs.
 
 In order:
 
-1. Did you remove `SPRING_PROFILES_ACTIVE=dev` from `console-api/.env`?
-   The dev profile bypasses auth and `AuthScope` never gets a JWT.
-2. Does the user have the right attributes in Keycloak? Read them with
-   the full-URL trick above (`--fields attributes` lies).
-3. Has the user logged out and back in since the attributes changed?
-   The JWT is only refreshed at login.
-4. Are the protocol-mappers still on the `sigdep-console` client? They
-   project the user attributes into the access-token claims. Inspect
-   with `kcadm.sh get clients/<id>/protocol-mappers/models -r sigdep`.
+1. La portée géo de l'utilisateur est-elle correcte ? Vérifier
+   `auth.user_geo_scope` (voir la section Comptes) et le rôle dans
+   `auth.users`.
+2. L'utilisateur s'est-il reconnecté depuis le changement de portée ?
+   Les claims de portée sont posés dans le JWT au login ; il faut un
+   nouveau login (ou un refresh) pour les rafraîchir.
+3. Le rôle est-il bien zone-bound ? Seuls `REGIONAL_COORD` /
+   `DISTRICT_COORD` / `SITE_USER` sont restreints ; les rôles nationaux
+   voient tout par conception.
 
 ### CORS errors on Firefox
 
 If you're hitting `/api/*` and Firefox refuses with "CORS désactivé", you
 are probably on a port that isn't behind the nginx proxy. Always use
 `http://localhost:9000` in dev — that's the whole point of the nginx
-single-origin setup. Direct hits to `:5173`, `:8041` or `:8180` work in
+single-origin setup. Direct hits to `:5173` or `:8041` work in
 Chrome but not in Firefox with strict tracking protection.
 
-### Keycloak loops between login screens
+### 401 sur toutes les requêtes après login
 
-Usually means the JWT issuer in the token doesn't match
-`KEYCLOAK_ISSUER_URI` configured in console-api / ingestion-api. After
-changing `KC_HOSTNAME`, restart both APIs so they re-read their config.
+Le `SIGDEP_JWT_SECRET` a probablement changé entre l'émission du token et
+sa vérification (chaque redémarrage avec un secret différent invalide les
+tokens). Fixer un secret stable et se reconnecter.
 
 ### `Liquibase: ChangeSet ... has already been ran with checksum`
 
@@ -191,15 +181,15 @@ when you add any `proxy_set_header` in a block).
 
 ## Cleaning a stale dev environment
 
-If things get weird (db schema mismatch, ghost user attributes, mystery
-401s):
+If things get weird (db schema mismatch, mystery 401s):
 
 ```bash
 cd infra
 docker compose down -v
 docker compose up -d
-# Then re-apply the userprofile and the kcadm tweaks (see above)
+# Relancer ingestion-api (applique Liquibase) puis console-api
+# (re-seede le SUPER_ADMIN si SIGDEP_ADMIN_* sont définis).
 ```
 
-Database + Keycloak state are reset; the realm gets re-imported from
-`realm-sigdep.json` on the first start.
+La base est repartie de zéro : les migrations Liquibase recréent les
+schémas (`core` / `audit` / `auth`) au démarrage d'ingestion-api.

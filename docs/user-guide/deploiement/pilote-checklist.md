@@ -42,18 +42,16 @@ retourne 200/301 sur le serveur cible.
 Responsable : **équipe SIGDEP**. Suit
 [Installer le hub](installer-hub.md).
 
-- ☐ Repo `sigdep-hub` cloné sur le serveur.
-- ☐ `infra/.env` créé, mots de passe forts générés et notés dans le
-  coffre-fort (Postgres, Keycloak admin, secrets clients OIDC).
-- ☐ Realm Keycloak `sigdep` importé.
-- ☐ Migrations Liquibase appliquées (33 changesets, `core.*` + `dim.*` +
-  `mart.*`).
+- ☐ Bundle de déploiement `sigdep-hub` extrait sur le serveur.
+- ☐ `.env` créé, secrets forts générés et notés dans le coffre-fort
+  (`POSTGRES_PASSWORD`, `SIGDEP_JWT_SECRET`, `SIGDEP_ADMIN_*`).
+- ☐ Migrations Liquibase appliquées (`core.*` + `audit.*` + `auth.*`).
 - ☐ Seed des `core.regions` / `core.districts` / `core.sites` chargé
   (les sites pilotes y figurent avec leur `code` définitif).
-- ☐ Client Keycloak `sigdep-agent` (client_credentials) créé pour
-  chaque site, secret noté.
-- ☐ Utilisateur SUPER_ADMIN initial créé dans Keycloak.
+- ☐ Compte SUPER_ADMIN initial seedé au boot (log console-api).
 - ☐ Console accessible sur `https://<host>/` en TLS, login SUPER_ADMIN OK.
+- ☐ Clé API générée (page Sites) pour chaque site pilote, transmise au
+  site par canal sécurisé.
 
 **Livrable** : connexion réussie à la console + page Dashboard qui
 charge (vide, mais sans 500).
@@ -85,7 +83,8 @@ Pour **chaque** site pilote, valider avec l'IT du site avant déploiement :
   `https://<hub>/` (vérifier proxy / firewall).
 - ☐ Code site (`SIGDEP_SITE_CODE`) confirmé avec le PNLS — doit
   exister dans `core.sites`.
-- ☐ Secret client Keycloak agent transmis au site par canal sécurisé.
+- ☐ Clé API du site (`SIGDEP_API_KEY`) générée dans la console et
+  transmise au site par canal sécurisé.
 
 ## 5. Site pilote — installation agent
 
@@ -146,7 +145,7 @@ Choisir **un** mode parmi A / B / C selon le poste cible :
 - ☐ Backlog des correctifs priorisé (v1.1).
 - ☐ Décision go/no-go pour la vague suivante de sites.
 - ☐ Si go : préparer le seed des nouveaux sites dans `core.sites` +
-  créer les clients Keycloak agent correspondants.
+  générer leurs clés API.
 
 ---
 
