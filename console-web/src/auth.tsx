@@ -31,6 +31,8 @@ export type AuthUser = {
   regionId: number | null;
   districtId: number | null;
   siteId: number | null;
+  /** Mot de passe temporaire : le front force le changement avant tout accès. */
+  mustChangePassword: boolean;
 };
 
 type JwtClaims = {
@@ -42,6 +44,7 @@ type JwtClaims = {
   regionId?: number;
   districtId?: number;
   siteId?: number;
+  mustChangePassword?: boolean;
   exp?: number;
 };
 
@@ -89,6 +92,7 @@ function userFromClaims(claims: JwtClaims | null): AuthUser | null {
     regionId: claims.regionId ?? null,
     districtId: claims.districtId ?? null,
     siteId: claims.siteId ?? null,
+    mustChangePassword: claims.mustChangePassword === true,
   };
 }
 
@@ -183,11 +187,15 @@ export function useAuth(): AuthContextValue {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  // Mot de passe temporaire : on bloque tout accès tant qu'il n'est pas changé.
+  if (user?.mustChangePassword && location.pathname !== '/changer-mot-de-passe') {
+    return <Navigate to="/changer-mot-de-passe" replace />;
   }
   return <>{children}</>;
 }

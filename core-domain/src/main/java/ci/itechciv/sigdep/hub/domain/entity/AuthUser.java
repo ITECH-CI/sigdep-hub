@@ -45,6 +45,10 @@ public class AuthUser {
     @Column(name = "password_expired", nullable = false)
     private Boolean passwordExpired = false;
 
+    /** Expiration du mot de passe (NULL = jamais). Dépassée → login refusé. */
+    @Column(name = "password_expires_at")
+    private Instant passwordExpiresAt;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
@@ -69,6 +73,12 @@ public class AuthUser {
     public void setActive(Boolean active) { this.active = active; }
     public Boolean getPasswordExpired() { return passwordExpired; }
     public void setPasswordExpired(Boolean passwordExpired) { this.passwordExpired = passwordExpired; }
+    public Instant getPasswordExpiresAt() { return passwordExpiresAt; }
+    public void setPasswordExpiresAt(Instant passwordExpiresAt) { this.passwordExpiresAt = passwordExpiresAt; }
+    /** True si une date d'expiration est fixée et dépassée. */
+    public boolean isPasswordTimeExpired(Instant now) {
+        return passwordExpiresAt != null && !passwordExpiresAt.isAfter(now);
+    }
     public Instant getLastLoginAt() { return lastLoginAt; }
     public void setLastLoginAt(Instant lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public Instant getCreatedAt() { return createdAt; }

@@ -7,6 +7,7 @@ import ci.itechciv.sigdep.hub.domain.entity.AuthUser;
 import ci.itechciv.sigdep.hub.domain.entity.UserGeoScope;
 import ci.itechciv.sigdep.hub.domain.repository.AuthUserRepository;
 import ci.itechciv.sigdep.hub.domain.repository.UserGeoScopeRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.springframework.data.domain.PageRequest;
@@ -115,6 +116,7 @@ public class UserAdminService {
         u.setUserLevel(level);
         u.setActive(req.active() == null || req.active());
         u.setPasswordExpired(hasPassword && Boolean.TRUE.equals(req.passwordTemporary()));
+        u.setPasswordExpiresAt(toInstant(req.passwordExpiresAt()));
         u = users.save(u);
 
         saveScope(u.getId(), level, req.regionId(), req.districtId(), req.siteId());
@@ -146,6 +148,18 @@ public class UserAdminService {
         if (!role.equals(u.getRole())) {
             changes.add("Rôle : " + u.getRole() + " → " + role);
         }
+
+        // Date d'expiration du mot de passe : toujours réécrite d'après la
+        // requête (null = pas d'expiration). Permet à l'admin de prolonger ou
+        // de débloquer un compte dont le mot de passe a expiré.
+        Instant newExpiry = toInstant(req.passwordExpiresAt());
+        if (!java.util.Objects.equals(newExpiry, u.getPasswordExpiresAt())) {
+            changes.add(newExpiry == null
+                    ? "Expiration du mot de passe retirée"
+                    : "Expiration du mot de passe mise à jour");
+            u.setPasswordExpiresAt(newExpiry);
+        }
+
         String level = levelFor(role, req.regionId(), req.districtId(), req.siteId());
         u.setRole(role);
         u.setUserLevel(level);
@@ -178,6 +192,9 @@ public class UserAdminService {
         AuthUser u = users.findById(id).orElseThrow(this::notFound);
         u.setPasswordHash(encoder.encode(password));
         u.setPasswordExpired(temporary);
+        // Le reset par l'admin débloque un compte expiré : on repart de zéro
+        // (plus d'expiration sur le nouveau mot de passe).
+        u.setPasswordExpiresAt(null);
         users.save(u);
         // Invalide les sessions en cours (refresh tokens) après un reset.
         authService.revokeAllForUser(id);
@@ -255,6 +272,7 @@ public class UserAdminService {
                 u.getId(), u.getEmail(), u.getDisplayName(), u.getRole(), u.getUserLevel(),
                 Boolean.TRUE.equals(u.getActive()),
                 Boolean.TRUE.equals(u.getPasswordExpired()),
+                u.getPasswordExpiresAt() == null ? null : u.getPasswordExpiresAt().toEpochMilli(),
                 u.getLastLoginAt() == null ? null : u.getLastLoginAt().toEpochMilli(),
                 u.getCreatedAt() == null ? null : u.getCreatedAt().toEpochMilli(),
                 s == null ? null : s.getRegionId(),
@@ -267,6 +285,7 @@ public class UserAdminService {
                 u.getId(), u.getEmail(), u.getDisplayName(), u.getRole(), u.getUserLevel(),
                 Boolean.TRUE.equals(u.getActive()),
                 Boolean.TRUE.equals(u.getPasswordExpired()),
+                u.getPasswordExpiresAt() == null ? null : u.getPasswordExpiresAt().toEpochMilli(),
                 u.getLastLoginAt() == null ? null : u.getLastLoginAt().toEpochMilli(),
                 u.getCreatedAt() == null ? null : u.getCreatedAt().toEpochMilli(),
                 s == null ? null : s.getRegionId(),
@@ -274,11 +293,16 @@ public class UserAdminService {
                 s == null ? null : s.getSiteId());
     }
 
+    /** Convertit un epoch-millis (depuis le front) en Instant, ou null. */
+    private static Instant toInstant(Long epochMillis) {
+        return epochMillis == null ? null : Instant.ofEpochMilli(epochMillis);
+    }
+
     // ---------- DTOs ---------------------------------------------------------
 
     public record UserRow(
             Long id, String email, String displayName, String role, String userLevel,
-            boolean active, boolean passwordExpired,
+            boolean active, boolean passwordExpired, Long passwordExpiresAt,
             Long lastLoginAt, Long createdAt,
             Long regionId, Long districtId, Long siteId) {}
 
@@ -286,17 +310,19 @@ public class UserAdminService {
 
     public record UserDetail(
             Long id, String email, String displayName, String role, String userLevel,
-            boolean active, boolean passwordExpired,
+            boolean active, boolean passwordExpired, Long passwordExpiresAt,
             Long lastLoginAt, Long createdAt,
             Long regionId, Long districtId, Long siteId) {}
 
     public record CreateUserRequest(
             String email, String displayName, String role,
             Boolean active, String password, Boolean passwordTemporary,
+            Long passwordExpiresAt,
             Long regionId, Long districtId, Long siteId) {}
 
     public record UpdateUserRequest(
             String displayName, String role, Boolean active,
+            Long passwordExpiresAt,
             Long regionId, Long districtId, Long siteId) {}
 
     public record ResetPasswordRequest(String password, boolean temporary) {}

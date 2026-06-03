@@ -63,6 +63,8 @@ public class JwtService {
         if (user.getRegionId() != null) builder.claim("regionId", user.getRegionId());
         if (user.getDistrictId() != null) builder.claim("districtId", user.getDistrictId());
         if (user.getSiteId() != null) builder.claim("siteId", user.getSiteId());
+        // Mot de passe temporaire → le front force le changement après login.
+        if (user.isPasswordExpired()) builder.claim("mustChangePassword", true);
         // HS256 explicite : JJWT choisirait sinon HS384/HS512 selon la taille
         // de la clé. On fige HS256 (décision v2.0).
         return builder.signWith(key, ALG).compact();

@@ -42,6 +42,8 @@ public class AuthController {
     public record LogoutRequest(String refreshToken) {}
     public record ForgotRequest(@Email @NotBlank String email) {}
     public record ResetRequest(@NotBlank String token, @NotBlank @Size(min = 8) String password) {}
+    public record ChangeRequest(@NotBlank String currentPassword,
+                                @NotBlank @Size(min = 8) String newPassword) {}
 
     public record TokenResponse(String accessToken, String refreshToken,
                                 String tokenType, long expiresIn) {
@@ -105,6 +107,18 @@ public class AuthController {
     }
 
     public record ValidityResponse(boolean valid) {}
+
+    /**
+     * Changement de mot de passe par l'utilisateur authentifié (ancien +
+     * nouveau). Sert notamment au changement forcé après un login avec mot de
+     * passe temporaire. Endpoint authentifié (JWT requis).
+     */
+    @PostMapping("/password/change")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void change(@AuthenticationPrincipal AuthenticatedUser user,
+                       @RequestBody @Validated ChangeRequest req) {
+        auth.changePassword(user.id(), req.currentPassword(), req.newPassword());
+    }
 
     /** Identifiants invalides / compte désactivé / refresh expiré → 401. */
     @ExceptionHandler(AuthenticationException.class)

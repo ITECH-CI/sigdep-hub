@@ -13,8 +13,10 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.CredentialsExpiredException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,7 @@ public class AuthService {
     private final JwtService jwt;
     private final AuthUserRepository users;
     private final RefreshTokenRepository refreshTokens;
+    private final PasswordEncoder encoder;
     private final Duration refreshTtl;
 
     public AuthService(AuthenticationManager authManager,
@@ -41,12 +44,14 @@ public class AuthService {
                        JwtService jwt,
                        AuthUserRepository users,
                        RefreshTokenRepository refreshTokens,
+                       PasswordEncoder encoder,
                        @Value("${app.jwt.refresh-ttl:P7D}") Duration refreshTtl) {
         this.authManager = authManager;
         this.userDetails = userDetails;
         this.jwt = jwt;
         this.users = users;
         this.refreshTokens = refreshTokens;
+        this.encoder = encoder;
         this.refreshTtl = refreshTtl;
     }
 
@@ -66,12 +71,43 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(email, password));
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
 
+        // Mot de passe EXPIRÉ (date dépassée) → login refusé. Seul un admin peut
+        // prolonger la date ou réinitialiser le mot de passe (le « mot de passe
+        // oublié » self-service ne contourne pas l'expiration). À distinguer du
+        // mot de passe « temporaire » qui, lui, laisse entrer et force le
+        // changement après login.
+        if (principal.isPasswordTimeExpired()) {
+            throw new CredentialsExpiredException(
+                    "Votre mot de passe a expiré. Contactez un administrateur.");
+        }
+
         users.findById(principal.getId()).ifPresent(u -> {
             u.setLastLoginAt(Instant.now());
             users.save(u);
         });
 
         return issue(principal);
+    }
+
+    /**
+     * Changement de mot de passe par l'utilisateur authentifié (vérifie
+     * l'ancien). Lève le drapeau « mot de passe temporaire » et révoque les
+     * autres sessions. Utilisé après un login avec mot de passe temporaire,
+     * ou volontairement par l'utilisateur.
+     *
+     * @throws BadCredentialsException si l'ancien mot de passe est incorrect.
+     */
+    @Transactional
+    public void changePassword(Long userId, String currentPassword, String newPassword) {
+        AuthUser user = users.findById(userId)
+                .orElseThrow(() -> new BadCredentialsException("Compte introuvable"));
+        if (!encoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new BadCredentialsException("Mot de passe actuel incorrect");
+        }
+        user.setPasswordHash(encoder.encode(newPassword));
+        user.setPasswordExpired(false); // n'était plus temporaire une fois changé
+        users.save(user);
+        revokeAllForUser(userId);
     }
 
     /**

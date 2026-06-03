@@ -1115,6 +1115,7 @@ export type UserRow = {
   userLevel: string;
   active: boolean;
   passwordExpired: boolean;
+  passwordExpiresAt: number | null;
   lastLoginAt: number | null;
   createdAt: number | null;
   regionId: number | null;
@@ -1138,6 +1139,7 @@ export type CreateUserRequest = {
   active?: boolean;
   password?: string;
   passwordTemporary?: boolean;
+  passwordExpiresAt?: number | null;
   regionId?: number | null;
   districtId?: number | null;
   siteId?: number | null;
@@ -1147,6 +1149,7 @@ export type UpdateUserRequest = {
   displayName?: string;
   role?: string;
   active?: boolean;
+  passwordExpiresAt?: number | null;
   regionId?: number | null;
   districtId?: number | null;
   siteId?: number | null;
@@ -1182,6 +1185,15 @@ export function resetUserPassword(id: number, password: string, temporary: boole
 
 export function setUserEnabled(id: number, enabled: boolean) {
   return send<void>('POST', `/api/v1/users/${id}/${enabled ? 'enable' : 'disable'}`);
+}
+
+/**
+ * Changement de mot de passe par l'utilisateur connecté (ancien + nouveau).
+ * Authentifié (JWT). Utilisé pour le changement forcé après un mot de passe
+ * temporaire.
+ */
+export function changeMyPassword(currentPassword: string, newPassword: string) {
+  return send<void>('POST', '/api/auth/password/change', { currentPassword, newPassword });
 }
 
 // --- API keys (auth de l'agent sigdep-sync) --------------------------------

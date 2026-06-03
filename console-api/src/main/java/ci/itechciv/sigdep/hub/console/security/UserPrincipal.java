@@ -2,6 +2,7 @@ package ci.itechciv.sigdep.hub.console.security;
 
 import ci.itechciv.sigdep.hub.domain.entity.AuthUser;
 import ci.itechciv.sigdep.hub.domain.entity.UserGeoScope;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.security.core.GrantedAuthority;
@@ -26,6 +27,7 @@ public class UserPrincipal implements UserDetails {
     private final String userLevel;
     private final boolean active;
     private final boolean passwordExpired;
+    private final boolean passwordTimeExpired;
     private final Long regionId;
     private final Long districtId;
     private final Long siteId;
@@ -39,6 +41,7 @@ public class UserPrincipal implements UserDetails {
         this.userLevel = u.getUserLevel();
         this.active = Boolean.TRUE.equals(u.getActive());
         this.passwordExpired = Boolean.TRUE.equals(u.getPasswordExpired());
+        this.passwordTimeExpired = u.isPasswordTimeExpired(Instant.now());
         this.regionId = scope != null ? scope.getRegionId() : null;
         this.districtId = scope != null ? scope.getDistrictId() : null;
         this.siteId = scope != null ? scope.getSiteId() : null;
@@ -69,6 +72,7 @@ public class UserPrincipal implements UserDetails {
     public String getRole() { return role; }
     public String getUserLevel() { return userLevel; }
     public boolean isPasswordExpired() { return passwordExpired; }
+    public boolean isPasswordTimeExpired() { return passwordTimeExpired; }
     public Long getRegionId() { return regionId; }
     public Long getDistrictId() { return districtId; }
     public Long getSiteId() { return siteId; }

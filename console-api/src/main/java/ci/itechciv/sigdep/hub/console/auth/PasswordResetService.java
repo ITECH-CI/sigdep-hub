@@ -75,6 +75,10 @@ public class PasswordResetService {
     public void requestReset(String emailAddr) {
         users.findByEmailIgnoreCase(emailAddr.trim())
                 .filter(u -> Boolean.TRUE.equals(u.getActive()))
+                // Un mot de passe EXPIRÉ ne peut PAS être réinitialisé en
+                // self-service (sinon l'expiration ne servirait à rien) : seul
+                // un admin débloque le compte.
+                .filter(u -> !u.isPasswordTimeExpired(java.time.Instant.now()))
                 .ifPresent(u -> sendLink(u, Kind.RESET));
     }
 

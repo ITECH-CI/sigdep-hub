@@ -6,6 +6,7 @@ import { Landing } from "./pages/Landing";
 import { Login } from "./pages/Login";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { SetPassword } from "./pages/SetPassword";
+import { ChangePassword } from "./pages/ChangePassword";
 import { PatientDetail } from "./pages/PatientDetail";
 import { Patients } from "./pages/Patients";
 import { Sites } from "./pages/Sites";
@@ -28,6 +29,17 @@ export function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
       <Route path="/definir-mot-de-passe" element={<SetPassword />} />
+
+      {/* Changement de mot de passe — authentifié, mais autorisé même quand
+          mustChangePassword force la redirection ici (cf. RequireAuth). */}
+      <Route
+        path="/changer-mot-de-passe"
+        element={
+          <RequireAuth>
+            <ChangePassword />
+          </RequireAuth>
+        }
+      />
 
       {/* Authenticated app — /app/* */}
       <Route

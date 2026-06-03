@@ -233,17 +233,34 @@ function ModalShell({ title, children, onClose, footer }:
   );
 }
 
+// NB : on n'enveloppe PAS les champs dans un <label>. Un <select> imbriqué
+// dans un <label> peut voir son événement « change » avalé (le clic sur une
+// option propage au label parent), d'où des sélecteurs qui « ne gardent pas »
+// leur valeur. On utilise donc un <div> + un <span> de libellé.
 function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="block text-xs font-medium text-ink-muted mb-1">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 
 const inputClass =
   'w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-sigdep-500 focus:ring-1 focus:ring-sigdep-500';
+
+/** epoch-millis → 'YYYY-MM-DD' pour un <input type="date">, ou '' si null. */
+function epochToDateInput(epoch: number | null | undefined): string {
+  if (!epoch) return '';
+  return new Date(epoch).toISOString().slice(0, 10);
+}
+
+/** 'YYYY-MM-DD' (fin de journée locale) → epoch-millis, ou null si vide. */
+function dateInputToEpoch(value: string): number | null {
+  if (!value) return null;
+  // Expire en fin de journée pour que la date saisie reste valide tout du long.
+  return new Date(`${value}T23:59:59`).getTime();
+}
 
 type ScopeState = {
   regionId: number | null;
@@ -454,6 +471,21 @@ function CreateModal({ onClose, onDone }: Readonly<{ onClose: () => void; onDone
       {form.role !== '' && !scopeOk && (
         <p className="text-rose-600 text-xs">Sélectionne la zone correspondant au rôle géographique.</p>
       )}
+
+      <label className="flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={form.active ?? true}
+               onChange={e => setForm({ ...form, active: e.target.checked })} />
+        Compte actif
+      </label>
+      <Field label="Expiration du mot de passe (optionnel)">
+        <input className={inputClass} type="date"
+               value={epochToDateInput(form.passwordExpiresAt)}
+               onChange={e => setForm({ ...form, passwordExpiresAt: dateInputToEpoch(e.target.value) })} />
+        <p className="text-[11px] text-ink-subtle mt-1">
+          Après cette date, l'utilisateur ne pourra plus se connecter ; seul un
+          administrateur pourra prolonger ou réinitialiser le mot de passe.
+        </p>
+      </Field>
       {m.isError && <p className="text-rose-600 text-xs">{(m.error as Error).message}</p>}
     </ModalShell>
   );
@@ -476,6 +508,7 @@ function EditModal({ userId, onClose, onDone }:
       displayName: d.displayName ?? '',
       role: d.role,
       active: d.active,
+      passwordExpiresAt: d.passwordExpiresAt ?? null,
       regionId: d.regionId ?? null,
       districtId: d.districtId ?? null,
       siteId: d.siteId ?? null,
@@ -524,6 +557,15 @@ function EditModal({ userId, onClose, onDone }:
           {!scopeOk && (
             <p className="text-rose-600 text-xs">Sélectionne la zone correspondant au rôle géographique.</p>
           )}
+          <Field label="Expiration du mot de passe (optionnel)">
+            <input className={inputClass} type="date"
+                   value={epochToDateInput(form.passwordExpiresAt)}
+                   onChange={e => setForm({ ...form, passwordExpiresAt: dateInputToEpoch(e.target.value) })} />
+            <p className="text-[11px] text-ink-subtle mt-1">
+              Vide = pas d'expiration. Une date passée bloque la connexion
+              jusqu'à intervention d'un administrateur.
+            </p>
+          </Field>
         </>
       )}
       {m.isError && <p className="text-rose-600 text-xs">{(m.error as Error).message}</p>}
