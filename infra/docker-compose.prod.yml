@@ -56,7 +56,17 @@ services:
       # Chiffrement : STARTTLS (587, défaut) ou SSL implicite (465).
       SIGDEP_MAIL_STARTTLS:            ${SIGDEP_MAIL_STARTTLS:-true}
       SIGDEP_MAIL_SSL:                 ${SIGDEP_MAIL_SSL:-false}
-    depends_on: [postgres]
+      # Faire confiance au certificat du serveur SMTP (host, ou "*").
+      # Office365 : SIGDEP_MAIL_SSL_TRUST=smtp.office365.com.
+      SIGDEP_MAIL_SSL_TRUST:           ${SIGDEP_MAIL_SSL_TRUST:-}
+    # console-api valide le schéma JPA au démarrage (auth.users, auth.api_keys…)
+    # mais c'est ingestion-api qui applique les migrations Liquibase. Sur une
+    # base vierge, attendre qu'il soit healthy évite un crash « missing table ».
+    depends_on:
+      postgres:
+        condition: service_started
+      ingestion-api:
+        condition: service_healthy
 
   ingestion-api:
     image: ${INGESTION_API_IMAGE:-sigdep-ingestion-api:latest}
@@ -112,7 +122,15 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: sigdep-nginx
-    depends_on: [console-api, ingestion-api, console-web]
+    # Attendre que les upstreams soient healthy : nginx résout les upstream au
+    # (re)chargement de conf et tomberait en erreur si un backend manque encore.
+    depends_on:
+      console-api:
+        condition: service_healthy
+      ingestion-api:
+        condition: service_healthy
+      console-web:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
