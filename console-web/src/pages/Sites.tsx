@@ -1,13 +1,19 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Building2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { fetchSites, SiteStatus } from '../api/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, ChevronLeft, ChevronRight, KeyRound, Search } from 'lucide-react';
+import {
+  fetchSites, SiteStatus,
+  fetchApiKeyStatus, generateApiKey, revokeApiKey,
+} from '../api/client';
+import { useAuth } from '../auth';
 import { formatInt } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
 import { StatusBadge, type BadgeTone } from '../components/StatusBadge';
 import { TableSkeleton } from '../components/Skeleton';
+
+const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'IT_ADMIN']);
 
 const STATUS_TABS: { value: SiteStatus; label: string }[] = [
   { value: 'all',     label: 'Tous' },
@@ -43,7 +49,11 @@ export function Sites() {
   const [scope, setScope] = useState<GeoScope>({});
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
+  const [keyModal, setKeyModal] = useState<{ id: number; code: string; name: string } | null>(null);
   const size = 50;
+
+  const { user } = useAuth();
+  const isAdmin = ADMIN_ROLES.has(user?.role ?? '');
 
   const sites = useQuery({
     queryKey: ['sites', query, status, scope, sort, page],
@@ -102,6 +112,7 @@ export function Sites() {
               <SortableTh k="patientCount"  sort={sort} onSort={onSort} align="right">Patients</SortableTh>
               <SortableTh k="lastSyncAt"    sort={sort} onSort={onSort}>Dernier sync</SortableTh>
               <th className="px-4 py-2 font-medium">SIGDEP</th>
+              {isAdmin && <th className="px-4 py-2 font-medium">Clé API</th>}
             </tr>
           </thead>
           {sites.isLoading ? (
@@ -109,9 +120,9 @@ export function Sites() {
           ) : (
           <tbody className="divide-y divide-slate-100">
             {sites.isError ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-rose-600">Erreur de chargement</td></tr>
+              <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-6 text-center text-rose-600">Erreur de chargement</td></tr>
             ) : sites.data?.content.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-muted">Aucun site</td></tr>
+              <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-6 text-center text-ink-muted">Aucun site</td></tr>
             ) : sites.data?.content.map(s => {
               const sb = syncBadge(s.lastSyncAt);
               const sg = sigdepBadge(s.runsSigdep);
@@ -130,6 +141,16 @@ export function Sites() {
                   <td className="px-4 py-2">
                     <StatusBadge tone={sg.tone}>{sg.label}</StatusBadge>
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() => setKeyModal({ id: s.id, code: s.code, name: s.name })}
+                        className="inline-flex items-center gap-1 text-xs text-sigdep-700 hover:underline">
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Gérer
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -163,6 +184,125 @@ export function Sites() {
           </div>
         </div>
       )}
+
+      {keyModal && (
+        <ApiKeyModal site={keyModal} onClose={() => setKeyModal(null)} />
+      )}
+    </div>
+  );
+}
+
+// ---------- API key modal --------------------------------------------------
+
+function ApiKeyModal({ site, onClose }:
+    Readonly<{ site: { id: number; code: string; name: string }; onClose: () => void }>) {
+  const qc = useQueryClient();
+  const [generated, setGenerated] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyKey = async () => {
+    if (!generated) return;
+    try {
+      await navigator.clipboard.writeText(generated);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard refusé (contexte non sécurisé) — l'utilisateur copie à la main
+      setError('Copie automatique indisponible — sélectionne et copie la clé manuellement.');
+    }
+  };
+
+  const statusQ = useQuery({
+    queryKey: ['apiKey', site.id],
+    queryFn: () => fetchApiKeyStatus(site.id),
+  });
+
+  const doGenerate = async () => {
+    setBusy(true); setError(null);
+    try {
+      const res = await generateApiKey(site.id);
+      setGenerated(res?.apiKey ?? null);
+      qc.invalidateQueries({ queryKey: ['apiKey', site.id] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Génération impossible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doRevoke = async () => {
+    setBusy(true); setError(null);
+    try {
+      await revokeApiKey(site.id);
+      setGenerated(null);
+      qc.invalidateQueries({ queryKey: ['apiKey', site.id] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Révocation impossible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const present = statusQ.data?.present ?? false;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-sigdep-800">Clé API — {site.code}</h3>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink text-lg leading-none">&times;</button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3 text-sm">
+          <p className="text-ink-muted">{site.name}</p>
+
+          {generated ? (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2">
+              <p className="text-xs font-medium text-amber-800">
+                Copie cette clé maintenant — elle ne sera plus jamais affichée.
+              </p>
+              <code className="block break-all rounded bg-white border border-amber-200 px-2 py-1.5 text-xs font-mono">
+                {generated}
+              </code>
+              <button
+                onClick={copyKey}
+                className="inline-flex items-center gap-1 text-xs rounded bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 transition">
+                <KeyRound className="h-3 w-3" />
+                {copied ? 'Copié !' : 'Copier la clé'}
+              </button>
+            </div>
+          ) : statusQ.isLoading ? (
+            <p className="text-ink-muted">Chargement…</p>
+          ) : present ? (
+            <p className="text-sm">
+              Une clé active existe (préfixe <span className="font-mono">{statusQ.data?.prefix}…</span>).
+              En générer une nouvelle <span className="font-medium">révoque</span> l'ancienne.
+            </p>
+          ) : (
+            <p className="text-sm text-ink-muted">Aucune clé active pour ce site.</p>
+          )}
+
+          {error && <p className="text-rose-600 text-xs">{error}</p>}
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-200 flex justify-end gap-2">
+          {present && !generated && (
+            <button onClick={doRevoke} disabled={busy}
+                    className="px-3 py-1.5 text-sm rounded border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+              Révoquer
+            </button>
+          )}
+          <button onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded">Fermer</button>
+          {!generated && (
+            <button onClick={doGenerate} disabled={busy}
+                    className="px-3 py-1.5 text-sm rounded bg-sigdep-600 text-white hover:bg-sigdep-700 disabled:opacity-50">
+              {busy ? 'Génération…' : present ? 'Régénérer' : 'Générer une clé'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

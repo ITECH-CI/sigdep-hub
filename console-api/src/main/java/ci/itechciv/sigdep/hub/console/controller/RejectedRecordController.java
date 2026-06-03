@@ -9,7 +9,7 @@ import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
+import ci.itechciv.sigdep.hub.console.security.AuthenticatedUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,15 +68,37 @@ public class RejectedRecordController {
             @PathVariable long id,
             @RequestBody(required = false) ResolveRequest body,
             Authentication auth) {
-        String username = "unknown";
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            String preferred = jwt.getClaim("preferred_username");
-            if (preferred != null && !preferred.isBlank()) username = preferred;
-        }
-        boolean ok = service.resolve(id, username, body == null ? null : body.note());
+        boolean ok = service.resolve(id, resolverEmail(auth), body == null ? null : body.note());
         return ok ? ResponseEntity.noContent().build()
                   : ResponseEntity.status(404).build();
     }
 
+    /**
+     * Résolution en masse vérifiée pour un site : marque résolus les rejets
+     * ouverts dont la donnée {@code (site_id, source_uuid)} est désormais
+     * présente en base métier (re-synchro réussie). Les rejets dont la donnée
+     * manque encore restent ouverts. Réservé aux administrateurs.
+     */
+    @PostMapping("/bulk-resolve")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','IT_ADMIN')")
+    public BulkResolveResponse bulkResolve(
+            @RequestBody BulkResolveRequest body,
+            Authentication auth) {
+        int n = service.bulkResolveLanded(
+                body.siteId(), body.entityType(), resolverEmail(auth),
+                body.note() == null ? "Résolution en masse — donnée ré-ingérée" : body.note());
+        return new BulkResolveResponse(n);
+    }
+
+    private static String resolverEmail(Authentication auth) {
+        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user
+                && user.email() != null && !user.email().isBlank()) {
+            return user.email();
+        }
+        return "unknown";
+    }
+
     public record ResolveRequest(String note) {}
+    public record BulkResolveRequest(Long siteId, String entityType, String note) {}
+    public record BulkResolveResponse(int resolved) {}
 }

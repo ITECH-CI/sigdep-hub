@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchDistricts, fetchRegions, fetchSitesOf } from '../api/client';
+import { Combobox } from './Combobox';
 
 export type GeoScope = {
   regionId?: number;
@@ -34,68 +35,39 @@ export function GeoFilter({
     enabled: value.regionId != null || value.districtId != null,
   });
 
-  // Fixed widths kill the shift when an empty disabled select fills with
-  // its first selection; otherwise <select> width = widest option.
-  const selectBase =
-    'rounded-md border border-slate-300 px-3 py-2 text-sm bg-white disabled:bg-slate-100 disabled:text-ink-subtle';
-
   return (
     <>
-      <select
-        className={`${selectBase} w-44`}
-        value={value.regionId ?? ''}
-        onChange={(e) => {
-          const v = e.target.value ? Number(e.target.value) : undefined;
-          onChange({ regionId: v });
-        }}
-      >
-        <option value="">Toutes les régions</option>
-        {regions.data?.map((r) => (
-          <option key={r.id} value={r.id}>{r.name}</option>
-        ))}
-      </select>
+      <Combobox
+        className="w-44"
+        options={(regions.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
+        value={value.regionId ?? null}
+        placeholder="Toutes les régions"
+        onChange={(v) => onChange({ regionId: v ?? undefined })}
+      />
 
-      <select
-        className={`${selectBase} w-52`}
-        value={value.districtId ?? ''}
+      <Combobox
+        className="w-52"
+        options={(districts.data ?? []).map((d) => ({ value: d.id, label: d.name }))}
+        value={value.districtId ?? null}
         disabled={value.regionId == null}
-        onChange={(e) => {
-          const v = e.target.value ? Number(e.target.value) : undefined;
-          onChange({ regionId: value.regionId, districtId: v });
-        }}
-      >
-        <option value="">
-          {value.regionId == null ? 'District (région d’abord)' : 'Tous les districts'}
-        </option>
-        {districts.data?.map((d) => (
-          <option key={d.id} value={d.id}>{d.name}</option>
-        ))}
-      </select>
+        placeholder={value.regionId == null ? 'District (région d’abord)' : 'Tous les districts'}
+        onChange={(v) => onChange({ regionId: value.regionId, districtId: v ?? undefined })}
+      />
 
-      <select
-        className={`${selectBase} w-64`}
-        value={value.siteId ?? ''}
+      <Combobox
+        className="w-64"
+        options={(sites.data ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))}
+        value={value.siteId ?? null}
         disabled={value.regionId == null && value.districtId == null}
-        onChange={(e) => {
-          const v = e.target.value ? Number(e.target.value) : undefined;
-          onChange({
-            regionId: value.regionId,
-            districtId: value.districtId,
-            siteId: v,
-          });
-        }}
-      >
-        <option value="">
-          {value.regionId == null && value.districtId == null
+        placeholder={
+          value.regionId == null && value.districtId == null
             ? 'Site (région ou district d’abord)'
-            : 'Tous les sites'}
-        </option>
-        {sites.data?.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.code} — {s.name}
-          </option>
-        ))}
-      </select>
+            : 'Tous les sites'
+        }
+        onChange={(v) =>
+          onChange({ regionId: value.regionId, districtId: value.districtId, siteId: v ?? undefined })
+        }
+      />
     </>
   );
 }

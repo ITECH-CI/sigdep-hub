@@ -1,0 +1,13 @@
+SIGDEP-3 — Modification de votre compte
+
+Bonjour [(${displayName})],
+
+Votre compte SIGDEP-3 ([(${email})]) vient d'être modifié par un
+administrateur :
+
+  [(${changeSummary})]
+
+Si vous n'êtes pas à l'origine de cette modification ou si elle vous
+semble suspecte, contactez immédiatement votre administrateur SIGDEP.
+
+— SIGDEP-3 · PNLS Côte d'Ivoire

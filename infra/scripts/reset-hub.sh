@@ -4,11 +4,10 @@
 # du hub SIGDEP, en préservant :
 #   - les référentiels (regions, districts, sites, identifier_types)
 #   - l'état Liquibase (databasechangelog / databasechangeloglock)
-#   - les schémas externes (Keycloak, etc.)
+#   - le schéma auth.* (comptes utilisateurs et clés API)
 #
 # Utile pour repartir d'un hub vide sans devoir tout reconstruire
-# (drop database / down -v du volume) — préserve donc Keycloak qui
-# vit dans la même instance Postgres.
+# (drop database / down -v du volume) — préserve donc les comptes.
 #
 # Usage :
 #   ./reset-hub.sh                       # interactif, demande confirmation
@@ -45,7 +44,7 @@ Variables d'environnement :
 Ce que le script préserve :
   - core.regions / districts / sites / identifier_types (seeds Liquibase)
   - public.databasechangelog* (état Liquibase)
-  - Keycloak (s'il partage la même instance Postgres)
+  - auth.* (comptes utilisateurs et clés API)
 EOF
 }
 
@@ -110,7 +109,7 @@ echo
 if [[ $ASSUME_YES -ne 1 ]]; then
     echo "Ce script va TRUNCATE les tables métier listées ci-dessus."
     echo "Les référentiels (regions/districts/sites/identifier_types) seront PRÉSERVÉS."
-    echo "L'état Liquibase et Keycloak ne sont pas touchés."
+    echo "L'état Liquibase et les comptes (auth.*) ne sont pas touchés."
     echo
     echo "Les agents en cours vont continuer à pousser des données ; il est"
     echo "préférable de coordonner avec les sites avant un reset en prod."

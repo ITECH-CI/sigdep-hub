@@ -1,22 +1,5 @@
 # Scripts opérationnels — hub SIGDEP
 
-## `import_realm.sh`
-
-Importe (ou réimporte avec `--override`) le realm Keycloak SIGDEP à
-partir de `infra/keycloak/realm-sigdep.json` dans le container
-`sigdep-keycloak` en cours d'exécution.
-
-```bash
-./import_realm.sh             # idempotent
-./import_realm.sh --override  # drop + re-import
-```
-
-À utiliser après avoir édité `realm-sigdep.json` (rôles, clients,
-loginTheme, etc.) pour propager les changements sans redémarrer la
-stack.
-
----
-
 ## `reset-hub.sh`
 
 TRUNCATE les tables métier (`core.*`) et l'audit (`audit.*`) du hub, en
@@ -36,7 +19,7 @@ préservant les référentiels et l'état Liquibase.
 - `core.regions`, `core.districts`, `core.sites` (référentiels seedés)
 - `core.identifier_types`
 - `public.databasechangelog*` (état Liquibase intact)
-- Tout schéma externe à `core.*` et `audit.*` (Keycloak notamment)
+- Le schéma `auth.*` (comptes, clés API) — non touché par le reset métier
 
 ### Usage
 
@@ -54,16 +37,15 @@ préservant les référentiels et l'état Liquibase.
 ### Quand l'utiliser
 
 - En phase d'intégration / test, pour repartir d'un hub propre sans
-  toucher au realm Keycloak ni au volume Postgres.
+  toucher aux comptes (`auth.*`) ni au volume Postgres.
 - Après une migration de schéma qui aurait dégradé l'intégrité des
   données.
 
 ### Quand **ne pas** l'utiliser
 
 - **Ne pas confondre** avec `docker compose down -v` : un `down -v`
-  efface tout le volume Postgres, donc **aussi Keycloak** (qui partage
-  l'instance). `reset-hub.sh` est conçu précisément pour ne pas tomber
-  dans ce piège.
+  efface tout le volume Postgres, donc **aussi les comptes** (`auth.*`).
+  `reset-hub.sh` est conçu précisément pour ne pas tomber dans ce piège.
 - En production sans coordination préalable avec les sites : les
   agents continueront à pousser, le hub repartira de zéro mais avec
   un délai variable selon la latence des sites.

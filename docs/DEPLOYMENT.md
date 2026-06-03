@@ -1,10 +1,10 @@
 # Deployment
 
 `infra/docker-compose.prod.yml` is the production-shaped compose file.
-It reproduces the dev topology (single nginx origin, Keycloak fronted by
-nginx, separate console-api / ingestion-api processes, shared
-PostgreSQL) but with TLS, secrets and image tags pulled from the
-environment.
+It reproduces the dev topology (single nginx origin, separate
+console-api / ingestion-api processes, shared PostgreSQL) but with TLS,
+secrets and image tags pulled from the environment. Auth is handled by
+console-api itself (Spring Security + JWT) — no separate identity server.
 
 The file is a **working skeleton**, not a turnkey deployment. Every
 placeholder labelled `change-me` must be replaced before a production
@@ -59,10 +59,9 @@ your secret manager. At minimum:
 
 ```bash
 POSTGRES_PASSWORD=...
-KEYCLOAK_ADMIN_PASSWORD=...
-KC_DB_PASSWORD=...
-KEYCLOAK_ADMIN_CLIENT_SECRET=...
-KC_HOSTNAME=https://sigdep.example.org
+SIGDEP_JWT_SECRET=...            # >= 32 octets, openssl rand -base64 48
+SIGDEP_ADMIN_EMAIL=admin@sigdep.example.org
+SIGDEP_ADMIN_PASSWORD=...        # seed du SUPER_ADMIN au 1er boot
 PUBLIC_ORIGIN=https://sigdep.example.org
 CONSOLE_API_IMAGE=ghcr.io/<owner>/sigdep-console-api:<version>
 INGESTION_API_IMAGE=ghcr.io/<owner>/sigdep-ingestion-api:<version>
@@ -76,24 +75,26 @@ docker compose --env-file /etc/sigdep/sigdep-hub.env \
   -f docker-compose.prod.yml up -d
 ```
 
-### 4. Bootstrap the Keycloak realm
+### 4. First boot — SUPER_ADMIN
 
-The first `--import-realm` start loads `realm-sigdep.json`. Then apply
-the user-profile (see `infra/keycloak/README.md`). Finally, **change
-every default password** in the realm before the first user logs in:
+Au premier démarrage, console-api crée le compte SUPER_ADMIN à partir de
+`SIGDEP_ADMIN_EMAIL` / `SIGDEP_ADMIN_PASSWORD` si la table `auth.users`
+est vide. Vérifier dans les logs :
 
-- The Keycloak master admin (`KEYCLOAK_ADMIN_PASSWORD`).
-- The default users (`pkomena`, `national-viewer`, `site-user`) shipped
-  in `realm-sigdep.json` — these are dev-only, delete or reset them.
-- The `sigdep-console-admin` and `sigdep-agent` client secrets.
+```bash
+docker compose logs console-api | grep -i SUPER_ADMIN
+```
+
+Se connecter sur `https://sigdep.example.org/`, puis créer les autres
+comptes via la page Utilisateurs. Retirer ensuite `SIGDEP_ADMIN_PASSWORD`
+de l'environnement.
 
 ### 5. Wire the agents
 
 Each `sigdep-sync` site agent needs:
 
-- `SIGDEP_HUB_URL=https://sigdep.example.org`
-- `SIGDEP_KEYCLOAK_URL=https://sigdep.example.org`
-- `SIGDEP_AGENT_CLIENT_SECRET=<from the realm>`
+- `SIGDEP_CENTRAL_API_URL=https://sigdep.example.org`
+- `SIGDEP_API_KEY=<clé générée dans la console, page Sites>`
 - `SIGDEP_SITE_CODE=<the local site code>`
 
 See `sigdep-sync/README.md` for the install procedure (systemd unit on
@@ -111,8 +112,8 @@ docker exec sigdep-postgres pg_dump -U sigdep sigdep \
 # Keep at least 30 days. Encrypt offsite if patient data is on it.
 ```
 
-The Keycloak database (separate, `KC_DB_NAME=keycloak`) also needs
-backups — user accounts, realms, federation config live there.
+Le dump ci-dessus inclut le schéma `auth` (comptes utilisateurs, clés
+API, refresh tokens) : pas de base séparée à sauvegarder.
 
 ### Upgrades
 
@@ -132,8 +133,8 @@ schema migration applied. In practice, this means: only add columns
   `/actuator/prometheus`. Nginx routes `/actuator/*` to console-api;
   ingestion-api's actuator stays on its internal port — scrape it from
   the Prometheus container directly.
-- Keycloak's management interface is on its own port (`8080` inside the
-  container) — don't expose it to the public network.
+- ingestion-api n'expose que `/api/v1/sync/**` (auth par clé API) ;
+  son actuator reste sur le port interne — ne pas l'exposer au public.
 
 ### TLS rotation
 

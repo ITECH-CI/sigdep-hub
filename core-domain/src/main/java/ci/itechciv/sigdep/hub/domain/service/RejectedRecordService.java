@@ -140,6 +140,77 @@ public class RejectedRecordService {
         return n > 0;
     }
 
+    /**
+     * Table {@code core.*} portant les données ingérées pour chaque
+     * {@code entity_type}. La clé métier est partout {@code (site_id,
+     * source_uuid)}. Mapping FIGÉ (jamais issu d'une entrée utilisateur) →
+     * aucun risque d'injection : on ne concatène que ces valeurs constantes.
+     */
+    private static final Map<String, String> ENTITY_TABLE = Map.ofEntries(
+            Map.entry("PATIENTS",              "core.patients"),
+            Map.entry("VISITS",                "core.visits"),
+            Map.entry("DISPENSATIONS",         "core.dispensations"),
+            Map.entry("SCREENINGS",            "core.screenings"),
+            Map.entry("TREATMENT_INITIATIONS", "core.treatment_initiations"),
+            Map.entry("PTME_MOTHERS",          "core.ptme_mothers"),
+            Map.entry("PTME_MOTHER_VISITS",    "core.ptme_mother_visits"),
+            Map.entry("PTME_CHILDREN",         "core.ptme_children"),
+            Map.entry("PTME_CHILD_VISITS",     "core.ptme_child_visits"),
+            Map.entry("TPT_RECORDS",           "core.tpt_records"),
+            Map.entry("LAB_RESULTS",           "core.lab_results"),
+            Map.entry("CLOSURES",              "core.closures"));
+
+    /**
+     * Résolution en masse <b>vérifiée</b> pour un site : pour chaque type
+     * d'entité, marque résolus les rejets ouverts dont le couple
+     * {@code (site_id, source_uuid)} <b>existe désormais</b> dans la table
+     * {@code core.*} correspondante (donc : la donnée a fini par être ingérée
+     * avec succès lors d'une re-synchro). Un rejet dont la donnée n'est
+     * toujours pas présente reste ouvert.
+     *
+     * @param siteId     site concerné (obligatoire — on ne solde jamais
+     *                   globalement)
+     * @param entityType limiter à un type ; {@code null} = tous
+     * @return nombre de rejets effectivement marqués résolus
+     */
+    public int bulkResolveLanded(Long siteId, String entityType, String resolvedBy, String note) {
+        if (siteId == null) {
+            throw new IllegalArgumentException("siteId obligatoire pour la résolution en masse");
+        }
+        String safeNote = note == null ? null : note.substring(0, Math.min(500, note.length()));
+
+        // Types à traiter : soit celui demandé (s'il est connu), soit tous.
+        List<String> types;
+        if (entityType != null && !entityType.isBlank()) {
+            String t = entityType.trim().toUpperCase();
+            if (!ENTITY_TABLE.containsKey(t)) {
+                return 0; // type inconnu ou non vérifiable (ex. IVSA_EVALUATIONS) → rien
+            }
+            types = List.of(t);
+        } else {
+            types = new ArrayList<>(ENTITY_TABLE.keySet());
+        }
+
+        int resolved = 0;
+        for (String type : types) {
+            String table = ENTITY_TABLE.get(type); // valeur constante, jamais user-controlled
+            // Marque résolus les rejets ouverts de ce site/type dont le
+            // source_uuid existe maintenant en base métier pour le même site.
+            int n = jdbc.update(
+                    "UPDATE audit.rejected_record r"
+                  + "   SET resolved_at = NOW(), resolved_by = ?, resolution_note = ?"
+                  + " WHERE r.resolved_at IS NULL"
+                  + "   AND r.site_id = ?"
+                  + "   AND r.entity_type = ?"
+                  + "   AND EXISTS (SELECT 1 FROM " + table + " c"
+                  + "                WHERE c.site_id = r.site_id"
+                  + "                  AND c.source_uuid = r.source_uuid)",
+                    resolvedBy, safeNote, siteId, type);
+            resolved += n;
+        }
+        return resolved;
+    }
+
     // ---------- geo helpers (same precedence as the rest of the app) -------
 
     private static String geoJoin(Long regionId, Long districtId, Long siteId) {

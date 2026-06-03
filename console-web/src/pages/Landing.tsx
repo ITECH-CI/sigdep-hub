@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "react-oidc-context";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth";
 import {
   Bar,
   BarChart,
@@ -25,8 +25,7 @@ export function Landing() {
   });
 
   const handleLogin = () => {
-    if (auth.isAuthenticated) navigate("/app");
-    else auth.signinRedirect();
+    navigate(auth.isAuthenticated ? "/app" : "/login");
   };
 
   return (

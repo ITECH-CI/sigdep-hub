@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      Clés API opaques (UUID) pour l'authentification de l'agent sigdep-sync.
+      Le UUID brut n'est jamais stocké : seul son hash BCrypt l'est, plus un
+      préfixe de 8 chars pour identifier rapidement la clé sans la déchiffrer.
+
+      NB : core.sites.api_key_hash (changeset 004) devient obsolète et sera
+      retiré en PR4. La nouvelle table porte la rotation (revoked_at, created_by).
+    -->
+    <changeSet id="038-create-auth-api-keys" author="itechciv" failOnError="true">
+        <createTable tableName="api_keys" schemaName="auth"
+                     remarks="Clés API par site pour l'agent sigdep-sync (header X-API-Key).">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="site_id" type="BIGINT">
+                <constraints nullable="false" unique="true"
+                             foreignKeyName="fk_api_keys_site"
+                             references="core.sites(id)" deleteCascade="true"/>
+            </column>
+            <column name="key_hash" type="VARCHAR(255)" remarks="BCrypt du UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="key_prefix" type="VARCHAR(8)"
+                    remarks="8 premiers chars du UUID, pour identifier la clé sans la déchiffrer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_api_keys_created_by"
+                             references="auth.users(id)"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_used_at" type="TIMESTAMP"/>
+            <column name="revoked_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="api_keys" schemaName="auth" indexName="idx_api_keys_prefix">
+            <column name="key_prefix"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="api_keys" schemaName="auth"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
