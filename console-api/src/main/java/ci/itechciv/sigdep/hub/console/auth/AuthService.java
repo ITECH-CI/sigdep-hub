@@ -89,6 +89,18 @@ public class AuthService {
         return issue(principal);
     }
 
+    /** Met à jour le nom affiché du compte courant. */
+    @Transactional
+    public void updateOwnProfile(Long userId, String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            throw new BadCredentialsException("Nom requis");
+        }
+        AuthUser user = users.findById(userId)
+                .orElseThrow(() -> new BadCredentialsException("Compte introuvable"));
+        user.setDisplayName(displayName.trim());
+        users.save(user);
+    }
+
     /**
      * Changement de mot de passe par l'utilisateur authentifié (vérifie
      * l'ancien). Lève le drapeau « mot de passe temporaire » et révoque les

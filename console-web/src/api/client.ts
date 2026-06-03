@@ -1187,6 +1187,11 @@ export function setUserEnabled(id: number, enabled: boolean) {
   return send<void>('POST', `/api/v1/users/${id}/${enabled ? 'enable' : 'disable'}`);
 }
 
+/** Envoie à l'utilisateur un lien de réinitialisation (l'admin ne saisit rien). */
+export function sendUserResetLink(id: number) {
+  return send<void>('POST', `/api/v1/users/${id}/send-reset-link`);
+}
+
 /**
  * Changement de mot de passe par l'utilisateur connecté (ancien + nouveau).
  * Authentifié (JWT). Utilisé pour le changement forcé après un mot de passe
@@ -1194,6 +1199,11 @@ export function setUserEnabled(id: number, enabled: boolean) {
  */
 export function changeMyPassword(currentPassword: string, newPassword: string) {
   return send<void>('POST', '/api/auth/password/change', { currentPassword, newPassword });
+}
+
+/** L'utilisateur courant met à jour son propre nom affiché. */
+export function updateMyProfile(displayName: string) {
+  return send<void>('POST', '/api/auth/me', { displayName });
 }
 
 // --- API keys (auth de l'agent sigdep-sync) --------------------------------

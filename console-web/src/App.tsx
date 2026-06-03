@@ -19,6 +19,7 @@ import { Depistage } from "./pages/Depistage";
 import { Ptme } from "./pages/Ptme";
 import { Synchronisation } from "./pages/Synchronisation";
 import { Utilisateurs } from "./pages/Utilisateurs";
+import { Profil } from "./pages/Profil";
 
 export function App() {
   return (
@@ -64,6 +65,7 @@ export function App() {
         <Route path="biologie" element={<Biologie />} />
         <Route path="sync" element={<Synchronisation />} />
         <Route path="users" element={<Utilisateurs />} />
+        <Route path="profil" element={<Profil />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

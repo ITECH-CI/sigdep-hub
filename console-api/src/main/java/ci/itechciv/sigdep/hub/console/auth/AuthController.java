@@ -73,6 +73,16 @@ public class AuthController {
                 user.regionId(), user.districtId(), user.siteId());
     }
 
+    /** L'utilisateur courant met à jour son propre profil (nom affiché). */
+    @PostMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void updateMe(@AuthenticationPrincipal AuthenticatedUser user,
+                         @RequestBody @Validated UpdateProfileRequest req) {
+        auth.updateOwnProfile(user.id(), req.displayName());
+    }
+
+    public record UpdateProfileRequest(@NotBlank String displayName) {}
+
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@RequestBody(required = false) LogoutRequest req) {

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  Activity, BarChart3, BookOpenCheck, Building2, ChevronLeft, ChevronRight,
+  Activity, BarChart3, BookOpenCheck, Building2, ChevronDown, ChevronLeft, ChevronRight,
   LayoutDashboard, LogOut, Menu, Microscope, Pill, RefreshCcw,
-  ShieldCheck, Stethoscope, Syringe, Users, type LucideIcon,
+  ShieldCheck, Stethoscope, Syringe, UserCog, Users, type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../auth";
 import { GlobalLoader } from "./GlobalLoader";
@@ -77,6 +77,18 @@ export function AppLayout() {
     await logout();
     navigate("/", { replace: true });
   };
+
+  // Menu utilisateur (sous le nom) : Mon profil / Déconnexion.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
 
   // Persist the collapse preference; auto-collapse on narrow viewports.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -159,19 +171,38 @@ export function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-muted hidden sm:inline">{displayName}</span>
-            <div className="h-8 w-8 rounded-full bg-sigdep-100 text-sigdep-700 flex items-center
-                            justify-center text-xs font-semibold uppercase">
-              {initials(displayName)}
-            </div>
+          <div ref={menuRef} className="relative">
             <button
-              onClick={handleLogout}
-              title="Déconnexion"
-              className="p-1.5 rounded-md hover:bg-slate-100 text-ink-muted hover:text-rose-600 transition"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100 transition"
             >
-              <LogOut className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-full bg-sigdep-100 text-sigdep-700 flex items-center
+                              justify-center text-xs font-semibold uppercase">
+                {initials(displayName)}
+              </div>
+              <span className="text-sm text-ink-muted hidden sm:inline">{displayName}</span>
+              <ChevronDown className="h-4 w-4 text-ink-subtle" />
             </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 mt-1 w-52 rounded-md border border-slate-200 bg-white shadow-lg py-1 z-50">
+                <Link
+                  to="/app/profil"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-slate-50"
+                >
+                  <UserCog className="h-4 w-4 text-ink-muted" />
+                  Mon profil
+                </Link>
+                <button
+                  onClick={() => { setMenuOpen(false); handleLogout(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-slate-50 hover:text-rose-600"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Déconnexion
+                </button>
+              </div>
+            )}
           </div>
         </header>
         <main className="flex-1 overflow-y-auto">
