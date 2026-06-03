@@ -204,6 +204,17 @@ public class UserAdminService {
                 Map.of("displayName", u.getDisplayName(), "email", u.getEmail()));
     }
 
+    /**
+     * Envoie à l'utilisateur un lien de réinitialisation de mot de passe
+     * (déclenché par l'admin). L'admin ne définit ni ne connaît le mot de
+     * passe ; le lien débloque aussi l'expiration éventuelle.
+     */
+    @Transactional
+    public void sendResetLink(Long id) {
+        AuthUser u = users.findById(id).orElseThrow(this::notFound);
+        passwordReset.sendAdminReset(u);
+    }
+
     @Transactional
     public void setEnabled(Long id, boolean enabled) {
         AuthUser u = users.findById(id).orElseThrow(this::notFound);

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CreateUserRequest, UpdateUserRequest, UserDetail, UserRow,
   createUser, fetchDistricts, fetchRegions, fetchSitesOf, fetchUser,
-  fetchUserRoles, fetchUsers, resetUserPassword, setUserEnabled, updateUser,
+  fetchUserRoles, fetchUsers, resetUserPassword, sendUserResetLink, setUserEnabled, updateUser,
 } from '../api/client';
 import { Search, ShieldCheck, UserPlus } from 'lucide-react';
 import { formatInt } from '../components/Kpi';
@@ -555,40 +555,88 @@ function EditModal({ userId, onClose, onDone }:
 
 function PasswordModal({ userId, email, onClose }:
     Readonly<{ userId: number; email: string; onClose: () => void }>) {
+  // 'link' = envoyer un lien de réinitialisation (l'admin ne connaît rien) ;
+  // 'manual' = définir un mot de passe maintenant.
+  const [mode, setMode] = useState<'link' | 'manual'>('link');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [temporary, setTemporary] = useState(true);
-  const m = useMutation({
+  const [linkSent, setLinkSent] = useState(false);
+
+  const sendLink = useMutation({
+    mutationFn: () => sendUserResetLink(userId),
+    onSuccess: () => setLinkSent(true),
+  });
+  const manual = useMutation({
     mutationFn: () => resetUserPassword(userId, password, temporary),
     onSuccess: onClose,
   });
+
   const passwordOk = !!password && password === confirm;
+  const pending = sendLink.isPending || manual.isPending;
+  const err = (sendLink.error ?? manual.error) as Error | null;
+
   return (
     <ModalShell title={`Mot de passe — ${email}`} onClose={onClose}
-      footer={<>
-        <button onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded">Annuler</button>
-        <button
-          onClick={() => m.mutate()}
-          disabled={!passwordOk || m.isPending}
-          className="px-3 py-1.5 text-sm rounded bg-sigdep-600 text-white hover:bg-sigdep-700 disabled:opacity-50">
-          {m.isPending ? 'Application…' : 'Réinitialiser'}
+      footer={linkSent ? (
+        <button onClick={onClose} className="px-3 py-1.5 text-sm rounded bg-sigdep-600 text-white hover:bg-sigdep-700">
+          Fermer
         </button>
-      </>}>
-      <Field label="Nouveau mot de passe">
-        <PasswordInput autoComplete="new-password" value={password} onChange={setPassword} />
-      </Field>
-      <Field label="Confirmer le mot de passe">
-        <PasswordInput autoComplete="new-password" value={confirm} onChange={setConfirm} />
-      </Field>
-      {password && !passwordOk && (
-        <p className="text-rose-600 text-xs">Les mots de passe ne correspondent pas.</p>
+      ) : (<>
+        <button onClick={onClose} className="px-3 py-1.5 text-sm border border-slate-300 rounded">Annuler</button>
+        {mode === 'link' ? (
+          <button onClick={() => sendLink.mutate()} disabled={pending}
+                  className="px-3 py-1.5 text-sm rounded bg-sigdep-600 text-white hover:bg-sigdep-700 disabled:opacity-50">
+            {sendLink.isPending ? 'Envoi…' : 'Envoyer le lien'}
+          </button>
+        ) : (
+          <button onClick={() => manual.mutate()} disabled={!passwordOk || pending}
+                  className="px-3 py-1.5 text-sm rounded bg-sigdep-600 text-white hover:bg-sigdep-700 disabled:opacity-50">
+            {manual.isPending ? 'Application…' : 'Réinitialiser'}
+          </button>
+        )}
+      </>)}>
+      {linkSent ? (
+        <p className="text-sm text-emerald-700">
+          Un lien de réinitialisation a été envoyé à <span className="font-medium">{email}</span>.
+        </p>
+      ) : (
+        <>
+          <label className="flex items-start gap-2 text-xs cursor-pointer">
+            <input type="radio" name="reset-mode" checked={mode === 'link'}
+                   onChange={() => setMode('link')} className="mt-0.5" />
+            <span>
+              <span className="font-medium">Envoyer un lien de réinitialisation</span> — l'utilisateur
+              redéfinit lui-même son mot de passe (recommandé). Débloque aussi un compte expiré.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs cursor-pointer">
+            <input type="radio" name="reset-mode" checked={mode === 'manual'}
+                   onChange={() => setMode('manual')} className="mt-0.5" />
+            <span className="font-medium">Définir un mot de passe maintenant</span>
+          </label>
+
+          {mode === 'manual' && (
+            <div className="space-y-2 pt-1">
+              <Field label="Nouveau mot de passe">
+                <PasswordInput autoComplete="new-password" value={password} onChange={setPassword} />
+              </Field>
+              <Field label="Confirmer le mot de passe">
+                <PasswordInput autoComplete="new-password" value={confirm} onChange={setConfirm} />
+              </Field>
+              {password && !passwordOk && (
+                <p className="text-rose-600 text-xs">Les mots de passe ne correspondent pas.</p>
+              )}
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={temporary}
+                       onChange={e => setTemporary(e.target.checked)} />
+                Temporaire (l'utilisateur devra le changer à la prochaine connexion)
+              </label>
+            </div>
+          )}
+        </>
       )}
-      <label className="flex items-center gap-2 text-xs">
-        <input type="checkbox" checked={temporary}
-               onChange={e => setTemporary(e.target.checked)} />
-        Temporaire (l'utilisateur devra le changer à la prochaine connexion)
-      </label>
-      {m.isError && <p className="text-rose-600 text-xs">{(m.error as Error).message}</p>}
+      {err && <p className="text-rose-600 text-xs">{err.message}</p>}
     </ModalShell>
   );
 }

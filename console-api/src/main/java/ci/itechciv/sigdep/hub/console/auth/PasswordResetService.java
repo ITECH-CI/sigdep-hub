@@ -91,6 +91,22 @@ public class PasswordResetService {
         sendLink(user, Kind.WELCOME);
     }
 
+    /**
+     * Réinitialisation déclenchée par un administrateur : envoie un lien de
+     * reset à l'utilisateur. Action de confiance → débloque l'expiration
+     * (efface password_expires_at) pour que l'utilisateur puisse redéfinir son
+     * mot de passe même si le compte était expiré. L'admin ne connaît jamais
+     * le nouveau mot de passe.
+     */
+    @Transactional
+    public void sendAdminReset(AuthUser user) {
+        if (user.getPasswordExpiresAt() != null) {
+            user.setPasswordExpiresAt(null);
+            users.save(user);
+        }
+        sendLink(user, Kind.RESET);
+    }
+
     private void sendLink(AuthUser user, Kind kind) {
         // Un seul lien actif à la fois : on invalide les précédents.
         tokens.invalidateActiveForUser(user.getId());

@@ -76,6 +76,13 @@ public class UsersController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Envoie un lien de réinitialisation à l'utilisateur (l'admin ne saisit rien). */
+    @PostMapping("/{id}/send-reset-link")
+    public ResponseEntity<Void> sendResetLink(@PathVariable Long id) {
+        service.sendResetLink(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{id}/enable")
     public ResponseEntity<Void> enable(@PathVariable Long id) {
         service.setEnabled(id, true);
