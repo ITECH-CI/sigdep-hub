@@ -114,7 +114,9 @@ Choisir **un** mode parmi A / B / C selon le poste cible :
 
 À faire dans cet ordre, sans sauter d'étape :
 
-- ☐ **T+5 min** : logs agent montrent `OAuthAuthenticator … token acquired`.
+- ☐ **T+5 min** : logs agent montrent `Agent configured for site '<code>'`
+  puis `Sync cycle started` (authentification par clé API `X-API-Key`, sans
+  message d'erreur 401).
 - ☐ **T+10 min** : page **Synchronisation** côté console montre le site
   avec `last_seen` récent.
 - ☐ **T+15 min** : premier cycle terminé, `core.patients` côté hub

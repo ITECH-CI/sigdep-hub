@@ -279,23 +279,50 @@ backups.
 
 ### Mise à jour de la stack
 
-Deux cas de figure :
+La version déployée est celle **épinglée dans votre `.env`** (variables
+`*_IMAGE`, p. ex. `…/sigdep-console-api:2.0.0`). C'est la source de vérité :
+les conteneurs tournent exactement sur ces tags. Les nouvelles versions sont
+publiées comme [releases GitHub](https://github.com/ITECH-CI/sigdep-hub/releases)
+(chaque tag `v*.*.*` publie 3 images sur GHCR + un bundle de déploiement).
 
-**Mise à jour mineure (nouveau tag d'images, pas de nouveaux fichiers
-de conf)** — il suffit de bumper les tags dans `.env` puis :
+#### 0. Avant toute mise à jour — sauvegarder
+
+Toujours faire un dump Postgres **avant** de mettre à jour (cf. *Sauvegarde
+Postgres* ci-dessus). Une migration de schéma n'est pas réversible une fois
+appliquée ; le seul retour arrière fiable est la restauration de ce dump.
 
 ```bash
 cd /opt/sigdep-hub
+# 1. Version actuellement déployée :
+grep _IMAGE .env
+# 2. Sauvegarde :
+docker exec sigdep-postgres pg_dump -U sigdep sigdep > backup-pre-maj-$(date +%F).sql
+```
+
+#### Cas A — Mise à jour mineure (mêmes fichiers de conf)
+
+Quand la release ne change que les images (pas de modification de
+`docker-compose.yml` / `nginx.prod.conf`). Bumper les tags dans `.env` puis :
+
+```bash
+cd /opt/sigdep-hub
+# Remplacer le numéro de version dans les 3 lignes *_IMAGE de .env, ex :
+sed -i 's|:[0-9]\+\.[0-9]\+\.[0-9]\+|:2.1.0|' .env   # vérifier le résultat !
+grep _IMAGE .env
+
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 ```
 
-**Mise à jour majeure (nouveau bundle avec compose / nginx / realm
-modifiés)** — télécharger le nouveau bundle à côté, comparer, fusionner :
+#### Cas B — Mise à jour majeure (compose / nginx modifiés)
+
+Quand les notes de release indiquent de nouveaux fichiers de conf (nouveau
+service, nouvelle route nginx, nouvelle variable). Télécharger le bundle à
+côté, comparer, fusionner :
 
 ```bash
 cd /opt
-VERSION=1.1.0   # remplacer
+VERSION=2.1.0   # remplacer
 curl -fsSL -o sigdep-hub-new.tar.gz \
   "https://github.com/ITECH-CI/sigdep-hub/releases/download/v${VERSION}/sigdep-hub-deploy-${VERSION}.tar.gz"
 tar -xzf sigdep-hub-new.tar.gz   # extrait sigdep-hub-deploy-${VERSION}/
@@ -303,15 +330,44 @@ tar -xzf sigdep-hub-new.tar.gz   # extrait sigdep-hub-deploy-${VERSION}/
 # Comparer avec votre installation actuelle :
 diff -r sigdep-hub/ sigdep-hub-deploy-${VERSION}/
 
-# Mettre à jour les fichiers modifiés (sauf .env qui contient vos secrets).
-# Puis :
+# Reporter les fichiers de conf modifiés (docker-compose.yml, nginx/…),
+# SANS écraser votre .env (il contient vos secrets). Le .env.example du
+# nouveau bundle liste les variables à ajouter le cas échéant. Puis :
 cd sigdep-hub
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 ```
 
-Liquibase appliquera automatiquement les nouvelles migrations au
-démarrage de `ingestion-api`.
+Liquibase applique automatiquement les nouvelles migrations de schéma au
+démarrage de `ingestion-api` (et `console-api` pour le schéma `auth`).
+
+#### Après la mise à jour — vérifier
+
+```bash
+docker compose ps                       # tous les services « Up (healthy) »
+grep _IMAGE .env                        # confirme les nouveaux tags
+docker logs sigdep-ingestion-api | tail # migrations appliquées sans erreur
+docker exec sigdep-console-api wget -qO- localhost:8041/actuator/health
+# → {"status":"UP"}
+```
+
+- ☐ Connexion à la console OK (login email/mot de passe).
+- ☐ Un agent existant synchronise toujours (clé API inchangée).
+- ☐ Page **Synchronisation** : `last_seen` des sites récent.
+
+#### Retour arrière (rollback)
+
+Si la nouvelle version pose problème **et qu'aucune migration de schéma
+incompatible n'a été appliquée** : remettre les anciens tags `*_IMAGE` dans
+`.env` puis `docker compose --env-file .env up -d`. Sinon, restaurer le dump
+pris à l'étape 0 :
+
+```bash
+docker compose --env-file .env down
+docker compose --env-file .env up -d postgres
+cat backup-pre-maj-AAAA-MM-JJ.sql | docker exec -i sigdep-postgres psql -U sigdep sigdep
+docker compose --env-file .env up -d
+```
 
 ### Reset complet
 
