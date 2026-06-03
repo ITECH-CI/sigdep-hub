@@ -69,10 +69,15 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Mail pour l'OTP de reset password (PR3 surtout) -->
+        <!-- Mail + templates Thymeleaf pour les emails transactionnels
+             (reset mot de passe, bienvenue, notifications de compte). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
 
         <dependency>

@@ -1,6 +1,8 @@
 package ci.itechciv.sigdep.hub.console.admin;
 
 import ci.itechciv.sigdep.hub.console.auth.AuthService;
+import ci.itechciv.sigdep.hub.console.auth.PasswordResetService;
+import ci.itechciv.sigdep.hub.console.mail.EmailService;
 import ci.itechciv.sigdep.hub.domain.entity.AuthUser;
 import ci.itechciv.sigdep.hub.domain.entity.UserGeoScope;
 import ci.itechciv.sigdep.hub.domain.repository.AuthUserRepository;
@@ -42,15 +44,21 @@ public class UserAdminService {
     private final UserGeoScopeRepository scopes;
     private final PasswordEncoder encoder;
     private final AuthService authService;
+    private final PasswordResetService passwordReset;
+    private final EmailService email;
 
     public UserAdminService(AuthUserRepository users,
                             UserGeoScopeRepository scopes,
                             PasswordEncoder encoder,
-                            AuthService authService) {
+                            AuthService authService,
+                            PasswordResetService passwordReset,
+                            EmailService email) {
         this.users = users;
         this.scopes = scopes;
         this.encoder = encoder;
         this.authService = authService;
+        this.passwordReset = passwordReset;
+        this.email = email;
     }
 
     // ---------- queries ------------------------------------------------------
@@ -82,30 +90,39 @@ public class UserAdminService {
 
     @Transactional
     public Long create(CreateUserRequest req) {
-        String email = requireEmail(req.email());
-        if (users.existsByEmailIgnoreCase(email)) {
+        String emailAddr = requireEmail(req.email());
+        if (users.existsByEmailIgnoreCase(emailAddr)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Un compte existe déjà pour " + email);
+                    "Un compte existe déjà pour " + emailAddr);
         }
         String role = requireRole(req.role());
         String level = levelFor(role, req.regionId(), req.districtId(), req.siteId());
 
-        if (req.password() == null || req.password().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Mot de passe initial requis");
-        }
+        // Mot de passe optionnel : s'il est absent, le compte est créé sans
+        // mot de passe utilisable et l'utilisateur reçoit un email avec un lien
+        // pour le définir lui-même (l'admin ne connaît jamais le mot de passe).
+        boolean hasPassword = req.password() != null && !req.password().isBlank();
 
         AuthUser u = new AuthUser();
-        u.setEmail(email);
-        u.setPasswordHash(encoder.encode(req.password()));
-        u.setDisplayName(displayName(req.displayName(), email));
+        u.setEmail(emailAddr);
+        // Hash non-utilisable (placeholder aléatoire) tant qu'aucun mot de passe
+        // n'est défini : aucun login possible avec une valeur connue.
+        u.setPasswordHash(encoder.encode(hasPassword
+                ? req.password()
+                : java.util.UUID.randomUUID().toString()));
+        u.setDisplayName(displayName(req.displayName(), emailAddr));
         u.setRole(role);
         u.setUserLevel(level);
         u.setActive(req.active() == null || req.active());
-        u.setPasswordExpired(Boolean.TRUE.equals(req.passwordTemporary()));
+        u.setPasswordExpired(hasPassword && Boolean.TRUE.equals(req.passwordTemporary()));
         u = users.save(u);
 
         saveScope(u.getId(), level, req.regionId(), req.districtId(), req.siteId());
+
+        // Sans mot de passe → email de bienvenue avec lien de définition.
+        if (!hasPassword) {
+            passwordReset.sendWelcome(u);
+        }
         return u.getId();
     }
 
@@ -113,10 +130,22 @@ public class UserAdminService {
     public void update(Long id, UpdateUserRequest req) {
         AuthUser u = users.findById(id).orElseThrow(this::notFound);
 
-        if (req.displayName() != null) u.setDisplayName(req.displayName());
-        if (req.active() != null) u.setActive(req.active());
+        // Résumé des changements (pour l'email de notification).
+        List<String> changes = new java.util.ArrayList<>();
+
+        if (req.displayName() != null && !req.displayName().equals(u.getDisplayName())) {
+            changes.add("Nom : « " + u.getDisplayName() + " » → « " + req.displayName() + " »");
+            u.setDisplayName(req.displayName());
+        }
+        if (req.active() != null && !req.active().equals(u.getActive())) {
+            changes.add(req.active() ? "Compte réactivé" : "Compte désactivé");
+            u.setActive(req.active());
+        }
 
         String role = req.role() != null ? requireRole(req.role()) : u.getRole();
+        if (!role.equals(u.getRole())) {
+            changes.add("Rôle : " + u.getRole() + " → " + role);
+        }
         String level = levelFor(role, req.regionId(), req.districtId(), req.siteId());
         u.setRole(role);
         u.setUserLevel(level);
@@ -126,6 +155,19 @@ public class UserAdminService {
         // non-zoné efface le scope existant.
         scopes.deleteByUserId(id);
         saveScope(id, level, req.regionId(), req.districtId(), req.siteId());
+
+        if (!changes.isEmpty()) {
+            notifyAccountChanged(u, String.join(" · ", changes));
+        }
+    }
+
+    /** Email de notification de sécurité (best-effort). */
+    private void notifyAccountChanged(AuthUser u, String summary) {
+        email.send(u.getEmail(), "Votre compte SIGDEP-3 a été modifié",
+                "account-changed",
+                Map.of("displayName", u.getDisplayName(),
+                       "email", u.getEmail(),
+                       "changeSummary", summary));
     }
 
     @Transactional
@@ -139,6 +181,10 @@ public class UserAdminService {
         users.save(u);
         // Invalide les sessions en cours (refresh tokens) après un reset.
         authService.revokeAllForUser(id);
+        // Notifie l'utilisateur du changement de mot de passe (sécurité).
+        email.send(u.getEmail(), "Votre mot de passe a été modifié",
+                "reset-confirmed",
+                Map.of("displayName", u.getDisplayName(), "email", u.getEmail()));
     }
 
     @Transactional

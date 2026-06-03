@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${subject}">SIGDEP-3</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <!-- Wrapper -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9; padding:24px 0;">
+    <tr>
+      <td align="center">
+        <!-- Carte -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+               style="max-width:560px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <!-- En-tête -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#009d8e 0%,#007d72 100%); padding:24px 32px;">
+              <span style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:-0.5px;">SIGDEP-3</span>
+              <span style="color:#d1fae5; font-size:13px; display:block; margin-top:2px;">PNLS · Côte d'Ivoire</span>
+            </td>
+          </tr>
+          <!-- Corps : fragment injecté -->
+          <tr>
+            <td style="padding:32px;">
+              <div th:replace="${body}">Contenu de l'email.</div>
+            </td>
+          </tr>
+          <!-- Pied -->
+          <tr>
+            <td style="padding:20px 32px; border-top:1px solid #e2e8f0; background-color:#f8fafc;">
+              <p style="margin:0; color:#94a3b8; font-size:12px; line-height:1.5;">
+                Cet email vous a été envoyé par le système SIGDEP-3.
+                Si vous n'êtes pas à l'origine de cette demande, ignorez ce message
+                ou contactez votre administrateur.
+              </p>
+              <p style="margin:8px 0 0; color:#cbd5e1; font-size:11px;">
+                © 2026 PNLS — Ministère de la Santé, de l'Hygiène Publique et de la Couverture Maladie Universelle
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

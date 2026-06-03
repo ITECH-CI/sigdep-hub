@@ -39,6 +39,15 @@ services:
       SIGDEP_IT_ADMIN_EMAIL:           ${SIGDEP_IT_ADMIN_EMAIL:-}
       SIGDEP_IT_ADMIN_PASSWORD:        ${SIGDEP_IT_ADMIN_PASSWORD:-}
       APP_CORS_ALLOWED_ORIGINS:        ${PUBLIC_ORIGIN:-https://sigdep.example.org}
+      # Base des liens dans les emails (mêmes valeur que l'origine publique).
+      SIGDEP_PUBLIC_URL:               ${PUBLIC_ORIGIN:-https://sigdep.example.org}
+      # Emails transactionnels (désactivés par défaut → logués).
+      SIGDEP_MAIL_ENABLED:             ${SIGDEP_MAIL_ENABLED:-false}
+      SIGDEP_MAIL_FROM:                ${SIGDEP_MAIL_FROM:-SIGDEP-3 <no-reply@sigdep.example.org>}
+      SIGDEP_MAIL_HOST:                ${SIGDEP_MAIL_HOST:-}
+      SIGDEP_MAIL_PORT:                ${SIGDEP_MAIL_PORT:-587}
+      SIGDEP_MAIL_USERNAME:            ${SIGDEP_MAIL_USERNAME:-}
+      SIGDEP_MAIL_PASSWORD:            ${SIGDEP_MAIL_PASSWORD:-}
     depends_on: [postgres]
 
   ingestion-api:

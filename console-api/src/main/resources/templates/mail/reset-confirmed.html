@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr"
+      th:replace="~{mail/_layout :: html(subject='Votre mot de passe a été modifié', body=~{::body})}">
+<body th:fragment="body">
+  <h1 style="margin:0 0 16px; color:#0f172a; font-size:20px; font-weight:600;">
+    Mot de passe modifié
+  </h1>
+  <p style="margin:0 0 16px; color:#334155; font-size:15px; line-height:1.6;">
+    Bonjour <span th:text="${displayName}">utilisateur</span>,
+  </p>
+  <p style="margin:0 0 16px; color:#334155; font-size:15px; line-height:1.6;">
+    Le mot de passe de votre compte SIGDEP-3
+    (<span th:text="${email}">email</span>) vient d'être modifié avec succès.
+    Toutes vos sessions actives ont été déconnectées.
+  </p>
+  <p style="margin:0; color:#64748b; font-size:13px; line-height:1.6;">
+    Si vous n'êtes pas à l'origine de cette modification, votre compte est
+    peut-être compromis : contactez <strong>immédiatement</strong> votre
+    administrateur SIGDEP pour le faire sécuriser.
+  </p>
+</body>
+</html>

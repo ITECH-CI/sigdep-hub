@@ -57,7 +57,7 @@ public class ConsoleSecurityConfig {
                         .requestMatchers("/", "/index.html", "/assets/**", "/favicon.ico").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/refresh",
-                                "/api/auth/password/forgot", "/api/auth/password/reset").permitAll()
+                                "/api/auth/password/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated())
                 // Requête non authentifiée → 401 (et non le 403 par défaut).

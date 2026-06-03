@@ -20,6 +20,19 @@ spring:
     # Per-cache override is possible via `caffeine.spec` on a specific cache.
     caffeine:
       spec: maximumSize=2000,expireAfterWrite=60s
+  # SMTP — utilisé seulement quand app.mail.enabled=true. Sinon les emails
+  # sont logués en console (dev). Renseigner via SIGDEP_MAIL_* (.env).
+  mail:
+    host: ${SIGDEP_MAIL_HOST:localhost}
+    port: ${SIGDEP_MAIL_PORT:587}
+    username: ${SIGDEP_MAIL_USERNAME:}
+    password: ${SIGDEP_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SIGDEP_MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${SIGDEP_MAIL_STARTTLS:true}
 app:
   jwt:
     # Clé symétrique HS256 — DOIT faire >= 32 octets. En prod, fournir
@@ -40,6 +53,17 @@ app:
     email: ${SIGDEP_IT_ADMIN_EMAIL:it-admin@sigdep.ci}
     password: ${SIGDEP_IT_ADMIN_PASSWORD:ChangeMe2026!}
     display-name: ${SIGDEP_IT_ADMIN_NAME:Administrateur Technique SIGDEP}
+  # URL publique du front, utilisée pour construire les liens dans les emails
+  # (réinitialisation / définition de mot de passe).
+  public-url: ${SIGDEP_PUBLIC_URL:http://localhost:9000}
+  mail:
+    # false (défaut) → les emails sont LOGUÉS en console au lieu d'être
+    # envoyés. Passer à true une fois le SMTP (spring.mail.*) configuré.
+    enabled: ${SIGDEP_MAIL_ENABLED:false}
+    from: ${SIGDEP_MAIL_FROM:SIGDEP-3 <no-reply@sigdep.ci>}
+    # TTL des liens : reset court, définition initiale (bienvenue) plus long.
+    reset-ttl: ${SIGDEP_MAIL_RESET_TTL:PT1H}
+    welcome-ttl: ${SIGDEP_MAIL_WELCOME_TTL:PT72H}
   web:
     resources:
       static-locations: classpath:/static/
