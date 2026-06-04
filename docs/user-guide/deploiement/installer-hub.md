@@ -259,19 +259,26 @@ Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
    SUPERSET_ADMIN_USERNAME=admin
    SUPERSET_ADMIN_PASSWORD=<mot_de_passe_fort>
    SUPERSET_ADMIN_EMAIL=admin@pnls.ci
+   SUPERSET_DB_READONLY_USER=superset_ro
    SUPERSET_DB_READONLY_PASSWORD=<mot_de_passe_fort>
    ```
 4. Dans `nginx.prod.conf`, ajuster `server_name analytics.*;` au domaine réel
    (ex. `server_name analytics.sigdep.example.org;`).
-5. Au premier démarrage, Superset initialise sa base de métadonnées et crée
-   son compte admin ; le rôle `superset_ro` est créé (SELECT sur `core` +
-   `analytics`, **jamais** sur `auth`).
-6. Ouvrir `https://analytics.<domaine>/` (login séparé, l'admin ci-dessus) →
-   **Settings → Database Connections → + Database**, ajouter la source SIGDEP :
+5. Le service `superset` se **construit** depuis `superset/Dockerfile` (image
+   officielle + driver PostgreSQL `psycopg2`, absent de l'image de base) :
+   ```bash
+   docker compose --env-file .env build superset
+   docker compose --env-file .env up -d superset
    ```
-   postgresql://superset_ro:<SUPERSET_DB_READONLY_PASSWORD>@postgres:5432/sigdep
-   ```
-7. Pour faire apparaître le menu **« Analyses avancées »** dans la console,
+6. Au premier démarrage, Superset initialise ses métadonnées, crée son compte
+   admin, **et déclare automatiquement la source de données « SIGDEP »** (rôle
+   lecture seule `superset_ro` → schémas `core` + `analytics`, **jamais**
+   `auth`). SQL Lab et les graphiques sont donc utilisables immédiatement, sans
+   ajouter la connexion à la main.
+7. Ouvrir `https://analytics.<domaine>/` → login (admin Superset ci-dessus) →
+   la base **SIGDEP** est déjà présente dans **SQL Lab** et le créateur de
+   graphiques.
+8. Pour faire apparaître le menu **« Analyses avancées »** dans la console,
    l'image `console-web` doit être buildée avec la variable de dépôt
    `VITE_SUPERSET_URL` = `https://analytics.<domaine>/`. Si elle est vide au
    build, le menu reste masqué (le reste de la console fonctionne normalement).

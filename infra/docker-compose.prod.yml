@@ -90,7 +90,12 @@ services:
   # défaut). À connecter à la base SIGDEP via le rôle lecture seule
   # superset_ro (URI : postgresql://superset_ro:<pwd>@postgres:5432/sigdep).
   superset:
-    image: apache/superset:4.1.1
+    # Image officielle + driver PostgreSQL (cf. superset/Dockerfile). L'image
+    # apache/superset n'embarque AUCUN driver tiers → sans ça, impossible de
+    # connecter PostgreSQL (ni SIGDEP, ni métadonnées).
+    build:
+      context: ./superset
+    image: sigdep-superset:4.1.1
     container_name: sigdep-superset
     environment:
       # Clé secrète Superset — OBLIGATOIRE, à générer (openssl rand -base64 42).
@@ -103,7 +108,10 @@ services:
       # nginx.prod.conf) → pas de sous-chemin, pas de collision /api,/static,
       # /login avec la console. ProxyFix via superset_config.py.
       SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
-    # Bootstrap : upgrade DB métadonnées + crée l'admin + init rôles, puis lance.
+      # URI de la base SIGDEP (rôle lecture seule) pré-provisionnée au boot.
+      SIGDEP_DB_URI: postgresql://${SUPERSET_DB_READONLY_USER:-superset_ro}:${SUPERSET_DB_READONLY_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-sigdep}
+    # Bootstrap : upgrade métadonnées + admin + init rôles + déclare la source
+    # SIGDEP (SQL Lab/charts utilisables d'emblée), puis lance gunicorn.
     # create-admin doit rester sur UNE ligne logique : replié sur plusieurs
     # lignes, bash lit « --username » comme une commande (« command not
     # found ») et l'admin n'est jamais créé.
@@ -114,6 +122,7 @@ services:
         superset db upgrade &&
         (superset fab create-admin --username "$${SUPERSET_ADMIN_USERNAME}" --firstname Admin --lastname SIGDEP --email "$${SUPERSET_ADMIN_EMAIL}" --password "$${SUPERSET_ADMIN_PASSWORD}" || true) &&
         superset init &&
+        (superset set-database-uri -d "SIGDEP" -u "$${SIGDEP_DB_URI}" || true) &&
         gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'
     volumes:
       - superset_home:/app/superset_home
