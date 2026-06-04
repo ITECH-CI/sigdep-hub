@@ -23,5 +23,40 @@ services:
       # Docker Desktop for Mac/Windows).
       - "host.docker.internal:host-gateway"
 
+  # Apache Superset — « Analyses avancées » en dev. Optionnel : démarrer
+  # explicitement avec `docker compose up -d superset` (le profil l'exclut
+  # du `up` par défaut, car il est lourd à booter). Le port 8088 est exposé
+  # sur l'hôte pour que le nginx dev l'atteigne via host.docker.internal:8088
+  # (cf. location /analytics/ dans nginx.conf). Login séparé (pas de SSO).
+  superset:
+    image: apache/superset:4.1.1
+    container_name: sigdep-superset
+    profiles: ["analytics"]
+    ports:
+      - "8088:8088"
+    environment:
+      # En dev, une clé fixe suffit (NE PAS réutiliser en prod).
+      SUPERSET_SECRET_KEY: dev-only-superset-secret-key-change-in-prod
+      SUPERSET_ADMIN_USERNAME: admin
+      SUPERSET_ADMIN_PASSWORD: admin
+      SUPERSET_ADMIN_EMAIL:    admin@sigdep.local
+      # Servi sous /analytics par le nginx dev (mêmes URLs qu'en prod).
+      SUPERSET_APP_ROOT:       /analytics
+      ENABLE_PROXY_FIX:        "true"
+    command: >
+      bash -c "
+      superset db upgrade &&
+      superset fab create-admin
+        --username \"$${SUPERSET_ADMIN_USERNAME}\"
+        --firstname Admin --lastname SIGDEP
+        --email \"$${SUPERSET_ADMIN_EMAIL}\"
+        --password \"$${SUPERSET_ADMIN_PASSWORD}\" || true &&
+      superset init &&
+      gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 'superset.app:create_app()'
+      "
+    volumes:
+      - superset_home:/app/superset_home
+
 volumes:
   postgres_data:
+  superset_home:
