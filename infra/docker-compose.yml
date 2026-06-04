@@ -40,9 +40,10 @@ services:
       SUPERSET_ADMIN_USERNAME: admin
       SUPERSET_ADMIN_PASSWORD: admin
       SUPERSET_ADMIN_EMAIL:    admin@sigdep.local
-      # Servi sous /analytics par le nginx dev (mêmes URLs qu'en prod).
-      SUPERSET_APP_ROOT:       /analytics
-      ENABLE_PROXY_FIX:        "true"
+      # Servi sous /analytics par le nginx dev (mêmes URLs qu'en prod). Le
+      # sous-chemin est géré par superset_config.py (X-Forwarded-Prefix) ;
+      # SUPERSET_APP_ROOT est ignoré par l'image 4.1.x, on ne s'en sert pas.
+      SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
     # Un seul appel bash -c. Chaque commande tient sur UNE ligne logique :
     # create-admin doit rester d'un bloc (sinon bash lit « --username » comme
     # une commande → « command not found » et l'admin n'est jamais créé).
@@ -56,6 +57,8 @@ services:
         gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 'superset.app:create_app()'
     volumes:
       - superset_home:/app/superset_home
+      # Config Superset (sous-chemin /analytics via X-Forwarded-Prefix).
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
 
 volumes:
   postgres_data:
