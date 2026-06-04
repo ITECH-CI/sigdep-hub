@@ -103,17 +103,17 @@ services:
       SUPERSET_APP_ROOT:       /analytics
       ENABLE_PROXY_FIX:        "true"
     # Bootstrap : upgrade DB métadonnées + crée l'admin + init rôles, puis lance.
-    command: >
-      bash -c "
-      superset db upgrade &&
-      superset fab create-admin
-        --username \"$${SUPERSET_ADMIN_USERNAME}\"
-        --firstname Admin --lastname SIGDEP
-        --email \"$${SUPERSET_ADMIN_EMAIL}\"
-        --password \"$${SUPERSET_ADMIN_PASSWORD}\" || true &&
-      superset init &&
-      gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'
-      "
+    # create-admin doit rester sur UNE ligne logique : replié sur plusieurs
+    # lignes, bash lit « --username » comme une commande (« command not
+    # found ») et l'admin n'est jamais créé.
+    command:
+      - bash
+      - -c
+      - |
+        superset db upgrade &&
+        (superset fab create-admin --username "$${SUPERSET_ADMIN_USERNAME}" --firstname Admin --lastname SIGDEP --email "$${SUPERSET_ADMIN_EMAIL}" --password "$${SUPERSET_ADMIN_PASSWORD}" || true) &&
+        superset init &&
+        gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'
     volumes:
       - superset_home:/app/superset_home
     depends_on: [postgres]
