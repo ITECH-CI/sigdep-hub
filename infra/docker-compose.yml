@@ -40,9 +40,9 @@ services:
       SUPERSET_ADMIN_USERNAME: admin
       SUPERSET_ADMIN_PASSWORD: admin
       SUPERSET_ADMIN_EMAIL:    admin@sigdep.local
-      # Servi sous /analytics par le nginx dev (mêmes URLs qu'en prod). Le
-      # sous-chemin est géré par superset_config.py (X-Forwarded-Prefix) ;
-      # SUPERSET_APP_ROOT est ignoré par l'image 4.1.x, on ne s'en sert pas.
+      # Servi à la racine d'un vhost dédié (http://analytics.localhost:9000) par
+      # le nginx dev → pas de sous-chemin, pas de collision /api,/static,/login
+      # avec la console. superset_config.py = ProxyFix (X-Forwarded-Proto/Host).
       SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
     # Un seul appel bash -c. Chaque commande tient sur UNE ligne logique :
     # create-admin doit rester d'un bloc (sinon bash lit « --username » comme
