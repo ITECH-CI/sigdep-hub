@@ -65,6 +65,18 @@ app:
   # URL publique du front, utilisée pour construire les liens dans les emails
   # (réinitialisation / définition de mot de passe).
   public-url: ${SIGDEP_PUBLIC_URL:http://localhost:9000}
+  # SSO Superset (« Analyses avancées ») par cookie de domaine parent : au
+  # login, console-api pose un cookie JWT lisible par le sous-domaine Superset.
+  # nginx (vhost analytics) le vérifie via /api/auth/verify (auth_request) et
+  # injecte l'identité → Superset connecte l'utilisateur sans re-login.
+  sso:
+    # Domaine du cookie : DOIT être le domaine parent commun à la console et à
+    # Superset (ex. .sigdep.example.org pour sigdep.* + analytics.*). En dev,
+    # localhost couvre localhost + analytics.localhost. Vide → cookie sans
+    # Domain (même hôte uniquement, donc SSO inactif vers le sous-domaine).
+    cookie-domain: ${SIGDEP_SSO_COOKIE_DOMAIN:localhost}
+    # Cookie Secure (HTTPS only). true en prod ; false en dev (http://localhost).
+    cookie-secure: ${SIGDEP_SSO_COOKIE_SECURE:false}
   mail:
     # false (défaut) → les emails sont LOGUÉS en console au lieu d'être
     # envoyés. Passer à true une fois le SMTP (spring.mail.*) configuré.
