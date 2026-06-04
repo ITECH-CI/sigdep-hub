@@ -239,11 +239,21 @@ Voir [installer-agent.md](installer-agent.md).
 
 ## Étape 8 — Superset (« Analyses avancées », optionnel)
 
-Le `docker-compose.prod.yml` inclut un service **Superset** servi sous
-`https://<host>/analytics/`, plus un rôle PostgreSQL **lecture seule**
-(`superset_ro`) créé au premier démarrage de la base.
+Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
+**sous-domaine dédié** `https://analytics.<host>/`, plus un rôle PostgreSQL
+**lecture seule** (`superset_ro`) créé au premier démarrage de la base.
 
-1. Renseigner dans `.env` :
+> **Pourquoi un sous-domaine et pas `/<host>/analytics/` ?** Superset sert son
+> interface, son API et ses assets à la racine (`/api`, `/static`, `/login`) —
+> exactement les chemins de la console. Sur un sous-chemin, ces routes entrent
+> en collision (page blanche, boucles de login). Un vhost dédié les isole.
+
+1. **DNS** : créer un enregistrement `analytics.<votre-domaine>` pointant vers
+   la même IP que le hub.
+2. **TLS** : le certificat monté dans `nginx/certs/` doit **couvrir
+   `analytics.<domaine>`** (SAN supplémentaire, ou certificat *wildcard*
+   `*.<domaine>`). Sans ça, le navigateur refusera le sous-domaine.
+3. Renseigner dans `.env` :
    ```ini
    SUPERSET_SECRET_KEY=<openssl rand -base64 42>
    SUPERSET_ADMIN_USERNAME=admin
@@ -251,17 +261,19 @@ Le `docker-compose.prod.yml` inclut un service **Superset** servi sous
    SUPERSET_ADMIN_EMAIL=admin@pnls.ci
    SUPERSET_DB_READONLY_PASSWORD=<mot_de_passe_fort>
    ```
-2. Au premier démarrage, Superset initialise sa base de métadonnées et crée
+4. Dans `nginx.prod.conf`, ajuster `server_name analytics.*;` au domaine réel
+   (ex. `server_name analytics.sigdep.example.org;`).
+5. Au premier démarrage, Superset initialise sa base de métadonnées et crée
    son compte admin ; le rôle `superset_ro` est créé (SELECT sur `core` +
    `analytics`, **jamais** sur `auth`).
-3. Dans Superset (login séparé, l'admin ci-dessus) → **Settings → Database
-   Connections → + Database**, ajouter la source SIGDEP :
+6. Ouvrir `https://analytics.<domaine>/` (login séparé, l'admin ci-dessus) →
+   **Settings → Database Connections → + Database**, ajouter la source SIGDEP :
    ```
    postgresql://superset_ro:<SUPERSET_DB_READONLY_PASSWORD>@postgres:5432/sigdep
    ```
-4. Pour faire apparaître le menu **« Analyses avancées »** dans la console,
+7. Pour faire apparaître le menu **« Analyses avancées »** dans la console,
    l'image `console-web` doit être buildée avec la variable de dépôt
-   `VITE_SUPERSET_URL` (ex. `https://<host>/analytics/`). Si elle est vide au
+   `VITE_SUPERSET_URL` = `https://analytics.<domaine>/`. Si elle est vide au
    build, le menu reste masqué (le reste de la console fonctionne normalement).
 
 > **Note SSO** : en l'état, Superset a sa **propre** authentification (login

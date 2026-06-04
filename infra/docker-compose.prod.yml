@@ -99,9 +99,10 @@ services:
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
       SUPERSET_ADMIN_EMAIL:    ${SUPERSET_ADMIN_EMAIL:-admin@sigdep.example.org}
-      # Servi derrière nginx sous le sous-chemin /analytics (cf. nginx.prod.conf).
-      SUPERSET_APP_ROOT:       /analytics
-      ENABLE_PROXY_FIX:        "true"
+      # Servi à la racine d'un vhost dédié (server_name analytics.<host> dans
+      # nginx.prod.conf) → pas de sous-chemin, pas de collision /api,/static,
+      # /login avec la console. ProxyFix via superset_config.py.
+      SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
     # Bootstrap : upgrade DB métadonnées + crée l'admin + init rôles, puis lance.
     # create-admin doit rester sur UNE ligne logique : replié sur plusieurs
     # lignes, bash lit « --username » comme une commande (« command not
@@ -116,8 +117,11 @@ services:
         gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'
     volumes:
       - superset_home:/app/superset_home
+      # Config Superset (ProxyFix derrière le nginx front).
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
     depends_on: [postgres]
-    # Pas de port host exposé : le nginx front route /analytics/ → superset:8088.
+    # Pas de port host exposé : le nginx front (vhost analytics.<host>) route
+    # vers superset:8088.
 
   nginx:
     image: nginx:1.27-alpine

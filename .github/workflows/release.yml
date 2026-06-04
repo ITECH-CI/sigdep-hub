@@ -156,8 +156,9 @@ jobs:
           file: console-web/Dockerfile
           push: true
           # VITE_SUPERSET_URL est inliné dans le bundle au build. Définir la
-          # variable de dépôt VITE_SUPERSET_URL (ex. https://<host>/analytics/)
-          # pour activer le menu « Analyses avancées » ; vide → menu masqué.
+          # variable de dépôt VITE_SUPERSET_URL (sous-domaine dédié, ex.
+          # https://analytics.<host>/) pour activer le menu « Analyses
+          # avancées » ; vide → menu masqué.
           build-args: |
             VITE_SUPERSET_URL=${{ vars.VITE_SUPERSET_URL }}
           tags: |
