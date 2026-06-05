@@ -87,6 +87,12 @@ Vous obtenez :
 complète (votre certificat suivi du / des intermédiaires de la CA),
 plus la clé privée dans `privkey.pem`.
 
+> Le dossier `nginx/certs/` n'existe pas dans le bundle — **créez-le d'abord**.
+> Sous `/opt`, la plupart des commandes nécessitent `sudo` :
+> ```bash
+> sudo mkdir -p /opt/sigdep-hub/nginx/certs
+> ```
+
 ### Cas Let's Encrypt (certbot)
 
 certbot produit déjà un `fullchain.pem` propre :
@@ -169,9 +175,24 @@ la version du bundle — ne pas y toucher sauf besoin spécifique.
 
 ## Étape 4 — Démarrer la stack
 
+Le service **Superset** se construit localement (image officielle + driver
+PostgreSQL, cf. `superset/Dockerfile`) — il n'est **pas** publié sur le
+registre. Il faut donc le **builder d'abord**, puis ne puller que les images
+distantes (sinon `pull` échoue sur `sigdep-superset … pull access denied`) :
+
 ```bash
-docker compose --env-file .env up -d
+cd /opt/sigdep-hub
+# 1. Construire l'image Superset locale (≈ 1-2 min)
+sudo docker compose --env-file .env build superset
+# 2. Tirer les images distantes UNIQUEMENT (--ignore-buildable saute superset)
+sudo docker compose --env-file .env pull --ignore-buildable
+# 3. Démarrer
+sudo docker compose --env-file .env up -d
 ```
+
+> Si votre version de Docker Compose ne connaît pas `--ignore-buildable`,
+> sautez l'étape 2 : `up -d` construit/tire automatiquement ce qu'il faut.
+> Sous `/opt`, préfixez les commandes par `sudo`.
 
 Au premier démarrage :
 
@@ -250,9 +271,19 @@ Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
 
 1. **DNS** : créer un enregistrement `analytics.<votre-domaine>` pointant vers
    la même IP que le hub.
-2. **TLS** : le certificat monté dans `nginx/certs/` doit **couvrir
-   `analytics.<domaine>`** (SAN supplémentaire, ou certificat *wildcard*
-   `*.<domaine>`). Sans ça, le navigateur refusera le sous-domaine.
+2. **TLS** : le certificat doit **couvrir le sous-domaine Superset**. Deux
+   conventions de nommage, selon le certificat disponible :
+   - `analytics.<console>` (avec un **point**) ajoute un niveau de
+     sous-domaine. ⚠️ Un wildcard `*.<parent>` **ne le couvre pas** si
+     `<console>` est déjà un sous-domaine (ex. `*.itech-civ.org` ne couvre
+     **pas** `analytics.sigdephub-v3.itech-civ.org`). Exige un certificat
+     dédié (Let's Encrypt SAN) ou `*.<console>`.
+   - `analytics-<console>` (avec un **tiret**) reste au **même niveau** que la
+     console → **couvert par le wildcard existant** `*.<parent>` (ex.
+     `*.itech-civ.org` couvre `analytics-sigdephub-v3.itech-civ.org`).
+     Pratique pour réutiliser un wildcard déjà en place, sans nouveau cert.
+   Le `server_name` du vhost Superset (`nginx.prod.conf`) accepte les deux
+   formes ; ajustez-le au domaine réel.
 3. Renseigner dans `.env` :
    ```ini
    SUPERSET_SECRET_KEY=<openssl rand -base64 42>
@@ -292,11 +323,16 @@ traduit en identité pour Superset.
 
 Pré-requis (en plus du sous-domaine et du certificat ci-dessus) :
 
-1. Console et Superset doivent partager un **domaine parent commun** :
-   `sigdep.<domaine>` + `analytics.<domaine>` → parent `.<domaine>`.
+1. Console et Superset doivent partager un **domaine parent commun**. La valeur
+   de `SIGDEP_SSO_COOKIE_DOMAIN` est ce parent (préfixé d'un point), selon la
+   convention de nommage choisie ci-dessus :
+   - point : `sigdep.<domaine>` + `analytics.sigdep.<domaine>` → parent
+     `.sigdep.<domaine>`.
+   - tiret : `sigdephub-v3.<domaine>` + `analytics-sigdephub-v3.<domaine>` →
+     parent `.<domaine>` (ex. `.itech-civ.org`).
 2. Dans `.env` :
    ```ini
-   SIGDEP_SSO_COOKIE_DOMAIN=.<domaine>      # ex. .sigdep.example.org
+   SIGDEP_SSO_COOKIE_DOMAIN=.<parent commun>   # ex. .itech-civ.org (tiret)
    SIGDEP_SSO_COOKIE_SECURE=true
    ```
    Laisser `SIGDEP_SSO_COOKIE_DOMAIN` **vide** désactive le SSO (Superset
@@ -330,8 +366,8 @@ publiées comme [releases GitHub](https://github.com/ITECH-CI/sigdep-hub/release
 
 #### 0. Avant toute mise à jour — sauvegarder
 
-Toujours faire un dump Postgres **avant** de mettre à jour (cf. *Sauvegarde
-Postgres* ci-dessus). Une migration de schéma n'est pas réversible une fois
+Toujours faire un dump Postgres **avant** de mettre à jour (cf. _Sauvegarde
+Postgres_ ci-dessus). Une migration de schéma n'est pas réversible une fois
 appliquée ; le seul retour arrière fiable est la restauration de ce dump.
 
 ```bash
@@ -353,8 +389,10 @@ cd /opt/sigdep-hub
 sed -i 's|:[0-9]\+\.[0-9]\+\.[0-9]\+|:2.1.0|' .env   # vérifier le résultat !
 grep _IMAGE .env
 
-docker compose --env-file .env pull
-docker compose --env-file .env up -d
+# Superset se build localement → le rebuilder, puis ne puller que le distant.
+sudo docker compose --env-file .env build superset
+sudo docker compose --env-file .env pull --ignore-buildable
+sudo docker compose --env-file .env up -d
 ```
 
 #### Cas B — Mise à jour majeure (compose / nginx modifiés)
@@ -377,8 +415,9 @@ diff -r sigdep-hub/ sigdep-hub-deploy-${VERSION}/
 # SANS écraser votre .env (il contient vos secrets). Le .env.example du
 # nouveau bundle liste les variables à ajouter le cas échéant. Puis :
 cd sigdep-hub
-docker compose --env-file .env pull
-docker compose --env-file .env up -d
+sudo docker compose --env-file .env build superset
+sudo docker compose --env-file .env pull --ignore-buildable
+sudo docker compose --env-file .env up -d
 ```
 
 Liquibase applique automatiquement les nouvelles migrations de schéma au
