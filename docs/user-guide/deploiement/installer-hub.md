@@ -283,9 +283,33 @@ Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
    `VITE_SUPERSET_URL` = `https://analytics.<domaine>/`. Si elle est vide au
    build, le menu reste masqué (le reste de la console fonctionne normalement).
 
-> **Note SSO** : en l'état, Superset a sa **propre** authentification (login
-> distinct de la console). L'authentification unique (SSO) est prévue dans une
-> phase ultérieure.
+### SSO — entrer dans Superset sans se reconnecter
+
+Un utilisateur déjà connecté à la console entre dans Superset **sans nouveau
+login**, avec son identité et un rôle dérivé de son rôle SIGDEP. Mécanisme :
+la console pose un cookie sur le **domaine parent**, que nginx vérifie et
+traduit en identité pour Superset.
+
+Pré-requis (en plus du sous-domaine et du certificat ci-dessus) :
+
+1. Console et Superset doivent partager un **domaine parent commun** :
+   `sigdep.<domaine>` + `analytics.<domaine>` → parent `.<domaine>`.
+2. Dans `.env` :
+   ```ini
+   SIGDEP_SSO_COOKIE_DOMAIN=.<domaine>      # ex. .sigdep.example.org
+   SIGDEP_SSO_COOKIE_SECURE=true
+   ```
+   Laisser `SIGDEP_SSO_COOKIE_DOMAIN` **vide** désactive le SSO (Superset
+   garde un login séparé).
+3. Mapping des rôles (automatique) : `SUPER_ADMIN`/`IT_ADMIN` → **Admin**,
+   `ANALYST` → **Alpha** (création), les autres → **Gamma** (lecture seule).
+
+> En mode SSO, Superset n'a plus de formulaire de login propre : un visiteur
+> non authentifié est redirigé vers le login de la console.
+
+**Langue** : l'interface Superset est en **français** par défaut
+(`BABEL_DEFAULT_LOCALE=fr` dans `superset_config.py`) ; chaque utilisateur peut
+basculer en anglais depuis son menu profil.
 
 ## Maintenance courante
 

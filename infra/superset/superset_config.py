@@ -15,6 +15,14 @@ log = logging.getLogger(__name__)
 # Clé secrète (fournie par l'env, défaut dev). NE PAS réutiliser en prod.
 SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "dev-only-change-me")
 
+# Interface en français par défaut (Superset est traduit via Flask-Babel).
+# L'utilisateur peut toujours basculer la langue depuis son menu profil.
+BABEL_DEFAULT_LOCALE = "fr"
+LANGUAGES = {
+    "fr": {"flag": "fr", "name": "Français"},
+    "en": {"flag": "us", "name": "English"},
+}
+
 # Derrière le nginx front (TLS terminé en amont) : honorer X-Forwarded-Proto
 # et X-Forwarded-Host pour générer des URLs absolues correctes.
 # x_port=0 : le host (X-Forwarded-Host) inclut déjà le port ; activer x_port

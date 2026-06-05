@@ -46,6 +46,10 @@ services:
       APP_CORS_ALLOWED_ORIGINS:        ${PUBLIC_ORIGIN:-https://sigdep.example.org}
       # Base des liens dans les emails (mêmes valeur que l'origine publique).
       SIGDEP_PUBLIC_URL:               ${PUBLIC_ORIGIN:-https://sigdep.example.org}
+      # SSO Superset : cookie posé sur le domaine PARENT commun à la console et
+      # à analytics.<domaine> (ex. .sigdep.example.org). Secure=true (HTTPS).
+      SIGDEP_SSO_COOKIE_DOMAIN:        ${SIGDEP_SSO_COOKIE_DOMAIN:-}
+      SIGDEP_SSO_COOKIE_SECURE:        ${SIGDEP_SSO_COOKIE_SECURE:-true}
       # Emails transactionnels (désactivés par défaut → logués).
       SIGDEP_MAIL_ENABLED:             ${SIGDEP_MAIL_ENABLED:-false}
       SIGDEP_MAIL_FROM:                ${SIGDEP_MAIL_FROM:-SIGDEP-3 <no-reply@sigdep.example.org>}
