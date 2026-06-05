@@ -5,6 +5,7 @@ import ci.itechciv.sigdep.hub.console.security.AuthenticatedUser;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
@@ -31,10 +32,13 @@ public class AuthController {
 
     private final AuthService auth;
     private final PasswordResetService passwordReset;
+    private final SsoCookieService ssoCookie;
 
-    public AuthController(AuthService auth, PasswordResetService passwordReset) {
+    public AuthController(AuthService auth, PasswordResetService passwordReset,
+                          SsoCookieService ssoCookie) {
         this.auth = auth;
         this.passwordReset = passwordReset;
+        this.ssoCookie = ssoCookie;
     }
 
     public record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}
@@ -57,13 +61,25 @@ public class AuthController {
                              Long regionId, Long districtId, Long siteId) {}
 
     @PostMapping("/login")
-    public TokenResponse login(@RequestBody @Validated LoginRequest req) {
-        return TokenResponse.from(auth.login(req.email(), req.password()));
+    public ResponseEntity<TokenResponse> login(@RequestBody @Validated LoginRequest req) {
+        Tokens t = auth.login(req.email(), req.password());
+        return withSsoCookie(t);
     }
 
     @PostMapping("/refresh")
-    public TokenResponse refresh(@RequestBody @Validated RefreshRequest req) {
-        return TokenResponse.from(auth.refresh(req.refreshToken()));
+    public ResponseEntity<TokenResponse> refresh(@RequestBody @Validated RefreshRequest req) {
+        Tokens t = auth.refresh(req.refreshToken());
+        return withSsoCookie(t);
+    }
+
+    /**
+     * Renvoie les tokens en JSON ET dépose le cookie SSO (JWT d'accès, domaine
+     * parent) pour que le sous-domaine Superset reconnaisse l'utilisateur.
+     */
+    private ResponseEntity<TokenResponse> withSsoCookie(Tokens t) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, ssoCookie.build(t.accessToken()).toString())
+                .body(TokenResponse.from(t));
     }
 
     @GetMapping("/me")
@@ -84,11 +100,30 @@ public class AuthController {
     public record UpdateProfileRequest(@NotBlank String displayName) {}
 
     @PostMapping("/logout")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@RequestBody(required = false) LogoutRequest req) {
+    public ResponseEntity<Void> logout(@RequestBody(required = false) LogoutRequest req) {
         if (req != null && req.refreshToken() != null) {
             auth.logout(req.refreshToken());
         }
+        // Efface aussi le cookie SSO (déconnexion propre côté Superset).
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, ssoCookie.expire().toString())
+                .build();
+    }
+
+    /**
+     * Point de vérification pour le SSO Superset (appelé par nginx en
+     * {@code auth_request}). Le JWT est lu soit dans {@code Authorization:
+     * Bearer}, soit dans le cookie {@code sigdep_sso} (cf. JwtAuthFilter). Si
+     * la requête est authentifiée, renvoie 200 + en-têtes d'identité que nginx
+     * propage à Superset ; sinon le filtre de sécurité répond 401.
+     */
+    @GetMapping("/verify")
+    public ResponseEntity<Void> verify(@AuthenticationPrincipal AuthenticatedUser user) {
+        return ResponseEntity.ok()
+                .header("X-Remote-User", user.email())
+                .header("X-Remote-Role", user.role())
+                .header("X-Remote-Name", user.displayName() == null ? "" : user.displayName())
+                .build();
     }
 
     /**

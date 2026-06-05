@@ -237,6 +237,80 @@ générée depuis la console (page **Sites** → bouton « Gérer » →
 copiez-la dans la config de l'agent (`SIGDEP_API_KEY`).
 Voir [installer-agent.md](installer-agent.md).
 
+## Étape 8 — Superset (« Analyses avancées », optionnel)
+
+Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
+**sous-domaine dédié** `https://analytics.<host>/`, plus un rôle PostgreSQL
+**lecture seule** (`superset_ro`) créé au premier démarrage de la base.
+
+> **Pourquoi un sous-domaine et pas `/<host>/analytics/` ?** Superset sert son
+> interface, son API et ses assets à la racine (`/api`, `/static`, `/login`) —
+> exactement les chemins de la console. Sur un sous-chemin, ces routes entrent
+> en collision (page blanche, boucles de login). Un vhost dédié les isole.
+
+1. **DNS** : créer un enregistrement `analytics.<votre-domaine>` pointant vers
+   la même IP que le hub.
+2. **TLS** : le certificat monté dans `nginx/certs/` doit **couvrir
+   `analytics.<domaine>`** (SAN supplémentaire, ou certificat *wildcard*
+   `*.<domaine>`). Sans ça, le navigateur refusera le sous-domaine.
+3. Renseigner dans `.env` :
+   ```ini
+   SUPERSET_SECRET_KEY=<openssl rand -base64 42>
+   SUPERSET_ADMIN_USERNAME=admin
+   SUPERSET_ADMIN_PASSWORD=<mot_de_passe_fort>
+   SUPERSET_ADMIN_EMAIL=admin@pnls.ci
+   SUPERSET_DB_READONLY_USER=superset_ro
+   SUPERSET_DB_READONLY_PASSWORD=<mot_de_passe_fort>
+   ```
+4. Dans `nginx.prod.conf`, ajuster `server_name analytics.*;` au domaine réel
+   (ex. `server_name analytics.sigdep.example.org;`).
+5. Le service `superset` se **construit** depuis `superset/Dockerfile` (image
+   officielle + driver PostgreSQL `psycopg2`, absent de l'image de base) :
+   ```bash
+   docker compose --env-file .env build superset
+   docker compose --env-file .env up -d superset
+   ```
+6. Au premier démarrage, Superset initialise ses métadonnées, crée son compte
+   admin, **et déclare automatiquement la source de données « SIGDEP »** (rôle
+   lecture seule `superset_ro` → schémas `core` + `analytics`, **jamais**
+   `auth`). SQL Lab et les graphiques sont donc utilisables immédiatement, sans
+   ajouter la connexion à la main.
+7. Ouvrir `https://analytics.<domaine>/` → login (admin Superset ci-dessus) →
+   la base **SIGDEP** est déjà présente dans **SQL Lab** et le créateur de
+   graphiques.
+8. Pour faire apparaître le menu **« Analyses avancées »** dans la console,
+   l'image `console-web` doit être buildée avec la variable de dépôt
+   `VITE_SUPERSET_URL` = `https://analytics.<domaine>/`. Si elle est vide au
+   build, le menu reste masqué (le reste de la console fonctionne normalement).
+
+### SSO — entrer dans Superset sans se reconnecter
+
+Un utilisateur déjà connecté à la console entre dans Superset **sans nouveau
+login**, avec son identité et un rôle dérivé de son rôle SIGDEP. Mécanisme :
+la console pose un cookie sur le **domaine parent**, que nginx vérifie et
+traduit en identité pour Superset.
+
+Pré-requis (en plus du sous-domaine et du certificat ci-dessus) :
+
+1. Console et Superset doivent partager un **domaine parent commun** :
+   `sigdep.<domaine>` + `analytics.<domaine>` → parent `.<domaine>`.
+2. Dans `.env` :
+   ```ini
+   SIGDEP_SSO_COOKIE_DOMAIN=.<domaine>      # ex. .sigdep.example.org
+   SIGDEP_SSO_COOKIE_SECURE=true
+   ```
+   Laisser `SIGDEP_SSO_COOKIE_DOMAIN` **vide** désactive le SSO (Superset
+   garde un login séparé).
+3. Mapping des rôles (automatique) : `SUPER_ADMIN`/`IT_ADMIN` → **Admin**,
+   `ANALYST` → **Alpha** (création), les autres → **Gamma** (lecture seule).
+
+> En mode SSO, Superset n'a plus de formulaire de login propre : un visiteur
+> non authentifié est redirigé vers le login de la console.
+
+**Langue** : l'interface Superset est en **français** par défaut
+(`BABEL_DEFAULT_LOCALE=fr` dans `superset_config.py`) ; chaque utilisateur peut
+basculer en anglais depuis son menu profil.
+
 ## Maintenance courante
 
 ### Sauvegarde Postgres
@@ -248,23 +322,50 @@ backups.
 
 ### Mise à jour de la stack
 
-Deux cas de figure :
+La version déployée est celle **épinglée dans votre `.env`** (variables
+`*_IMAGE`, p. ex. `…/sigdep-console-api:2.0.0`). C'est la source de vérité :
+les conteneurs tournent exactement sur ces tags. Les nouvelles versions sont
+publiées comme [releases GitHub](https://github.com/ITECH-CI/sigdep-hub/releases)
+(chaque tag `v*.*.*` publie 3 images sur GHCR + un bundle de déploiement).
 
-**Mise à jour mineure (nouveau tag d'images, pas de nouveaux fichiers
-de conf)** — il suffit de bumper les tags dans `.env` puis :
+#### 0. Avant toute mise à jour — sauvegarder
+
+Toujours faire un dump Postgres **avant** de mettre à jour (cf. *Sauvegarde
+Postgres* ci-dessus). Une migration de schéma n'est pas réversible une fois
+appliquée ; le seul retour arrière fiable est la restauration de ce dump.
 
 ```bash
 cd /opt/sigdep-hub
+# 1. Version actuellement déployée :
+grep _IMAGE .env
+# 2. Sauvegarde :
+docker exec sigdep-postgres pg_dump -U sigdep sigdep > backup-pre-maj-$(date +%F).sql
+```
+
+#### Cas A — Mise à jour mineure (mêmes fichiers de conf)
+
+Quand la release ne change que les images (pas de modification de
+`docker-compose.yml` / `nginx.prod.conf`). Bumper les tags dans `.env` puis :
+
+```bash
+cd /opt/sigdep-hub
+# Remplacer le numéro de version dans les 3 lignes *_IMAGE de .env, ex :
+sed -i 's|:[0-9]\+\.[0-9]\+\.[0-9]\+|:2.1.0|' .env   # vérifier le résultat !
+grep _IMAGE .env
+
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 ```
 
-**Mise à jour majeure (nouveau bundle avec compose / nginx / realm
-modifiés)** — télécharger le nouveau bundle à côté, comparer, fusionner :
+#### Cas B — Mise à jour majeure (compose / nginx modifiés)
+
+Quand les notes de release indiquent de nouveaux fichiers de conf (nouveau
+service, nouvelle route nginx, nouvelle variable). Télécharger le bundle à
+côté, comparer, fusionner :
 
 ```bash
 cd /opt
-VERSION=1.1.0   # remplacer
+VERSION=2.1.0   # remplacer
 curl -fsSL -o sigdep-hub-new.tar.gz \
   "https://github.com/ITECH-CI/sigdep-hub/releases/download/v${VERSION}/sigdep-hub-deploy-${VERSION}.tar.gz"
 tar -xzf sigdep-hub-new.tar.gz   # extrait sigdep-hub-deploy-${VERSION}/
@@ -272,15 +373,44 @@ tar -xzf sigdep-hub-new.tar.gz   # extrait sigdep-hub-deploy-${VERSION}/
 # Comparer avec votre installation actuelle :
 diff -r sigdep-hub/ sigdep-hub-deploy-${VERSION}/
 
-# Mettre à jour les fichiers modifiés (sauf .env qui contient vos secrets).
-# Puis :
+# Reporter les fichiers de conf modifiés (docker-compose.yml, nginx/…),
+# SANS écraser votre .env (il contient vos secrets). Le .env.example du
+# nouveau bundle liste les variables à ajouter le cas échéant. Puis :
 cd sigdep-hub
 docker compose --env-file .env pull
 docker compose --env-file .env up -d
 ```
 
-Liquibase appliquera automatiquement les nouvelles migrations au
-démarrage de `ingestion-api`.
+Liquibase applique automatiquement les nouvelles migrations de schéma au
+démarrage de `ingestion-api` (et `console-api` pour le schéma `auth`).
+
+#### Après la mise à jour — vérifier
+
+```bash
+docker compose ps                       # tous les services « Up (healthy) »
+grep _IMAGE .env                        # confirme les nouveaux tags
+docker logs sigdep-ingestion-api | tail # migrations appliquées sans erreur
+docker exec sigdep-console-api wget -qO- localhost:8041/actuator/health
+# → {"status":"UP"}
+```
+
+- ☐ Connexion à la console OK (login email/mot de passe).
+- ☐ Un agent existant synchronise toujours (clé API inchangée).
+- ☐ Page **Synchronisation** : `last_seen` des sites récent.
+
+#### Retour arrière (rollback)
+
+Si la nouvelle version pose problème **et qu'aucune migration de schéma
+incompatible n'a été appliquée** : remettre les anciens tags `*_IMAGE` dans
+`.env` puis `docker compose --env-file .env up -d`. Sinon, restaurer le dump
+pris à l'étape 0 :
+
+```bash
+docker compose --env-file .env down
+docker compose --env-file .env up -d postgres
+cat backup-pre-maj-AAAA-MM-JJ.sql | docker exec -i sigdep-postgres psql -U sigdep sigdep
+docker compose --env-file .env up -d
+```
 
 ### Reset complet
 

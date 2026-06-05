@@ -83,8 +83,9 @@ keep the rest in `extra_data` for ad-hoc queries.
 
 ## Authentication
 
-Auth v2.0 — Spring Security pur, intégré à `console-api` (plus de
-Keycloak). Deux mécanismes :
+Auth v2.0 — Spring Security pur, intégré à `console-api`. Aucun serveur
+d'identité externe : l'authentification est gérée par `console-api`
+lui-même. Deux mécanismes :
 
 - **Utilisateurs (console)** : login email/mot de passe sur
   `POST /api/auth/login` → access token **JWT HS256** (TTL 1h) +
@@ -202,8 +203,11 @@ Key conventions:
 
 - All API calls go through `console-web/src/api/client.ts`. It owns the
   Bearer token injection and the typed response shapes.
-- Authentication is wrapped by `react-oidc-context`. The `RequireAuth`
-  HOC redirects unauthenticated users to the landing page.
+- Authentication is handled by a custom JWT context in
+  `console-web/src/auth.tsx` (access + refresh tokens in localStorage,
+  `Authorization: Bearer …` injection). The `RequireAuth` HOC redirects
+  unauthenticated users to the login page (and to the forced
+  password-change page when the JWT carries `mustChangePassword`).
 - Tailwind palette: `sigdep` teal is primary; `accent` indigo is the
   admin section accent. Status colours follow the `StatusBadge` enum
   (`ok` / `warning` / `danger` / `info` / `neutral`).

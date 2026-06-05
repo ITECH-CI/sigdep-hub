@@ -19,8 +19,13 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:-sigdep}
       POSTGRES_USER:     ${POSTGRES_USER:-sigdep}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      # Rôle lecture seule pour Superset, créé au 1er boot (si mot de passe fourni).
+      SUPERSET_DB_READONLY_USER:     ${SUPERSET_DB_READONLY_USER:-superset_ro}
+      SUPERSET_DB_READONLY_PASSWORD: ${SUPERSET_DB_READONLY_PASSWORD:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Script init exécuté UNE FOIS au premier boot (volume vierge).
+      - ./postgres/01-init-superset-readonly.sh:/docker-entrypoint-initdb.d/01-init-superset-readonly.sh:ro
     # No host port exposed in prod — DB is reached over the compose network.
 
   console-api:
@@ -41,6 +46,10 @@ services:
       APP_CORS_ALLOWED_ORIGINS:        ${PUBLIC_ORIGIN:-https://sigdep.example.org}
       # Base des liens dans les emails (mêmes valeur que l'origine publique).
       SIGDEP_PUBLIC_URL:               ${PUBLIC_ORIGIN:-https://sigdep.example.org}
+      # SSO Superset : cookie posé sur le domaine PARENT commun à la console et
+      # à analytics.<domaine> (ex. .sigdep.example.org). Secure=true (HTTPS).
+      SIGDEP_SSO_COOKIE_DOMAIN:        ${SIGDEP_SSO_COOKIE_DOMAIN:-}
+      SIGDEP_SSO_COOKIE_SECURE:        ${SIGDEP_SSO_COOKIE_SECURE:-true}
       # Emails transactionnels (désactivés par défaut → logués).
       SIGDEP_MAIL_ENABLED:             ${SIGDEP_MAIL_ENABLED:-false}
       SIGDEP_MAIL_FROM:                ${SIGDEP_MAIL_FROM:-SIGDEP-3 <no-reply@sigdep.example.org>}
@@ -51,7 +60,17 @@ services:
       # Chiffrement : STARTTLS (587, défaut) ou SSL implicite (465).
       SIGDEP_MAIL_STARTTLS:            ${SIGDEP_MAIL_STARTTLS:-true}
       SIGDEP_MAIL_SSL:                 ${SIGDEP_MAIL_SSL:-false}
-    depends_on: [postgres]
+      # Faire confiance au certificat du serveur SMTP (host, ou "*").
+      # Office365 : SIGDEP_MAIL_SSL_TRUST=smtp.office365.com.
+      SIGDEP_MAIL_SSL_TRUST:           ${SIGDEP_MAIL_SSL_TRUST:-}
+    # console-api valide le schéma JPA au démarrage (auth.users, auth.api_keys…)
+    # mais c'est ingestion-api qui applique les migrations Liquibase. Sur une
+    # base vierge, attendre qu'il soit healthy évite un crash « missing table ».
+    depends_on:
+      postgres:
+        condition: service_started
+      ingestion-api:
+        condition: service_healthy
 
   ingestion-api:
     image: ${INGESTION_API_IMAGE:-sigdep-ingestion-api:latest}
@@ -70,10 +89,65 @@ services:
     # Pas de port host exposé : le nginx front est seul à sortir sur
     # 443. console-web ne répond qu'au réseau interne du compose.
 
+  # Apache Superset — « Analyses avancées ». Login séparé (pas de SSO en
+  # phase 1). Métadonnées Superset persistées dans un volume (SQLite par
+  # défaut). À connecter à la base SIGDEP via le rôle lecture seule
+  # superset_ro (URI : postgresql://superset_ro:<pwd>@postgres:5432/sigdep).
+  superset:
+    # Image officielle + driver PostgreSQL (cf. superset/Dockerfile). L'image
+    # apache/superset n'embarque AUCUN driver tiers → sans ça, impossible de
+    # connecter PostgreSQL (ni SIGDEP, ni métadonnées).
+    build:
+      context: ./superset
+    image: sigdep-superset:4.1.1
+    container_name: sigdep-superset
+    environment:
+      # Clé secrète Superset — OBLIGATOIRE, à générer (openssl rand -base64 42).
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change-me-superset-secret-key}
+      # Compte admin Superset créé au 1er boot.
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      SUPERSET_ADMIN_EMAIL:    ${SUPERSET_ADMIN_EMAIL:-admin@sigdep.example.org}
+      # Servi à la racine d'un vhost dédié (server_name analytics.<host> dans
+      # nginx.prod.conf) → pas de sous-chemin, pas de collision /api,/static,
+      # /login avec la console. ProxyFix via superset_config.py.
+      SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
+      # URI de la base SIGDEP (rôle lecture seule) pré-provisionnée au boot.
+      SIGDEP_DB_URI: postgresql://${SUPERSET_DB_READONLY_USER:-superset_ro}:${SUPERSET_DB_READONLY_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-sigdep}
+    # Bootstrap : upgrade métadonnées + admin + init rôles + déclare la source
+    # SIGDEP (SQL Lab/charts utilisables d'emblée), puis lance gunicorn.
+    # create-admin doit rester sur UNE ligne logique : replié sur plusieurs
+    # lignes, bash lit « --username » comme une commande (« command not
+    # found ») et l'admin n'est jamais créé.
+    command:
+      - bash
+      - -c
+      - |
+        superset db upgrade &&
+        (superset fab create-admin --username "$${SUPERSET_ADMIN_USERNAME}" --firstname Admin --lastname SIGDEP --email "$${SUPERSET_ADMIN_EMAIL}" --password "$${SUPERSET_ADMIN_PASSWORD}" || true) &&
+        superset init &&
+        (superset set-database-uri -d "SIGDEP" -u "$${SIGDEP_DB_URI}" || true) &&
+        gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'
+    volumes:
+      - superset_home:/app/superset_home
+      # Config Superset (ProxyFix derrière le nginx front).
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    depends_on: [postgres]
+    # Pas de port host exposé : le nginx front (vhost analytics.<host>) route
+    # vers superset:8088.
+
   nginx:
     image: nginx:1.27-alpine
     container_name: sigdep-nginx
-    depends_on: [console-api, ingestion-api, console-web]
+    # Attendre que les upstreams soient healthy : nginx résout les upstream au
+    # (re)chargement de conf et tomberait en erreur si un backend manque encore.
+    depends_on:
+      console-api:
+        condition: service_healthy
+      ingestion-api:
+        condition: service_healthy
+      console-web:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -85,3 +159,4 @@ services:
 
 volumes:
   postgres_data:
+  superset_home:
