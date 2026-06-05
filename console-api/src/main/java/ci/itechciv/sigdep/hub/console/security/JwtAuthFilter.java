@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -29,6 +30,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final String BEARER = "Bearer ";
+    /** Cookie de SSO Superset (cf. SsoCookieService). */
+    private static final String SSO_COOKIE = "sigdep_sso";
 
     private final JwtService jwt;
 
@@ -40,11 +43,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String header = request.getHeader("Authorization");
-        if (header != null && header.startsWith(BEARER)
+        String token = resolveToken(request);
+        if (token != null
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
-                Claims claims = jwt.parse(header.substring(BEARER.length()).trim());
+                Claims claims = jwt.parse(token);
                 AuthenticatedUser principal = AuthenticatedUser.fromClaims(claims);
                 var authToken = new UsernamePasswordAuthenticationToken(
                         principal, null,
@@ -57,5 +60,26 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Résout le JWT depuis l'en-tête {@code Authorization: Bearer} (cas normal
+     * du SPA) ou, à défaut, depuis le cookie {@code sigdep_sso} (cas du SSO
+     * Superset : nginx auth_request transmet le cookie, pas d'en-tête Bearer).
+     */
+    private String resolveToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith(BEARER)) {
+            return header.substring(BEARER.length()).trim();
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie c : cookies) {
+                if (SSO_COOKIE.equals(c.getName()) && c.getValue() != null && !c.getValue().isBlank()) {
+                    return c.getValue();
+                }
+            }
+        }
+        return null;
     }
 }

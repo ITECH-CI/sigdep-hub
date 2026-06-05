@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity, BarChart3, BookOpenCheck, Building2, ChevronDown, ChevronLeft, ChevronRight,
-  LayoutDashboard, LogOut, Menu, Microscope, Pill, RefreshCcw,
+  LayoutDashboard, LineChart, LogOut, Menu, Microscope, Pill, RefreshCcw,
   ShieldCheck, Stethoscope, Syringe, UserCog, Users, type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../auth";
@@ -13,8 +13,16 @@ type NavItem = {
   label: string;
   icon: LucideIcon;
   requireRoles?: string[];
+  /** Lien externe (nouvel onglet) au lieu d'une route interne du SPA. */
+  external?: boolean;
 };
 type NavGroup = { label?: string; items: NavItem[]; tone?: "admin" };
+
+/**
+ * URL de l'instance Superset (« Analyses avancées »). Configurable via
+ * VITE_SUPERSET_URL ; vide → le menu n'apparaît pas.
+ */
+const SUPERSET_URL = import.meta.env.VITE_SUPERSET_URL ?? "";
 
 /**
  * `requireRoles` filters the link by the realm roles in the JWT. Items
@@ -46,6 +54,16 @@ const NAV: NavGroup[] = [
       { to: "/app/biologie",  label: "Biologie",         icon: Microscope },
     ],
   },
+  // « Analyses avancées » (Superset) — ajouté seulement si l'URL est configurée.
+  ...(SUPERSET_URL
+    ? [{
+        label: "Analyses",
+        items: [
+          { to: SUPERSET_URL, label: "Analyses avancées", icon: LineChart, external: true,
+            requireRoles: ["SUPER_ADMIN", "IT_ADMIN", "NATIONAL_VIEWER", "ANALYST", "AUDITOR"] },
+        ],
+      } as NavGroup]
+    : []),
   {
     label: "Admin",
     tone: "admin",
@@ -217,6 +235,24 @@ function SidebarLink({ item, collapsed, tone }:
     Readonly<{ item: NavItem; collapsed: boolean; tone?: "admin" }>) {
   const Icon = item.icon;
   const accent = tone === "admin";
+
+  // Lien externe (ex. Superset) : ouvre dans un nouvel onglet.
+  if (item.external) {
+    return (
+      <a
+        href={item.to}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={collapsed ? item.label : undefined}
+        className={`flex items-center gap-3 rounded-md mb-0.5 transition relative text-ink hover:bg-slate-100
+                    ${collapsed ? "px-2 py-2 justify-center" : "px-3 py-2"}`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </a>
+    );
+  }
+
   return (
     <NavLink
       to={item.to}

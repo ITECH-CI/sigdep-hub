@@ -6,10 +6,15 @@ services:
       POSTGRES_DB: sigdep
       POSTGRES_USER: sigdep
       POSTGRES_PASSWORD: sigdep
+      # Rôle lecture seule pour Superset (créé au 1er boot sur volume vierge).
+      SUPERSET_DB_READONLY_USER:     superset_ro
+      SUPERSET_DB_READONLY_PASSWORD: superset_ro
     ports:
       - "5436:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Même script init que la prod (idempotent, s'exécute sur volume vierge).
+      - ./postgres/01-init-superset-readonly.sh:/docker-entrypoint-initdb.d/01-init-superset-readonly.sh:ro
 
   nginx:
     image: nginx:1.27-alpine
@@ -23,5 +28,52 @@ services:
       # Docker Desktop for Mac/Windows).
       - "host.docker.internal:host-gateway"
 
+  # Apache Superset — « Analyses avancées » en dev. Optionnel : démarrer
+  # explicitement avec `docker compose up -d superset` (le profil l'exclut
+  # du `up` par défaut, car il est lourd à booter). Le port 8088 est exposé
+  # sur l'hôte pour que le nginx dev l'atteigne via host.docker.internal:8088
+  # (cf. location /analytics/ dans nginx.conf). Login séparé (pas de SSO).
+  superset:
+    # Image officielle + driver PostgreSQL (cf. superset/Dockerfile).
+    build:
+      context: ./superset
+    image: sigdep-superset:4.1.1
+    container_name: sigdep-superset
+    profiles: ["analytics"]
+    ports:
+      - "8088:8088"
+    environment:
+      # En dev, une clé fixe suffit (NE PAS réutiliser en prod).
+      SUPERSET_SECRET_KEY: dev-only-superset-secret-key-change-in-prod
+      SUPERSET_ADMIN_USERNAME: admin
+      SUPERSET_ADMIN_PASSWORD: admin
+      SUPERSET_ADMIN_EMAIL:    admin@sigdep.local
+      # Servi à la racine d'un vhost dédié (http://analytics.localhost:9000) par
+      # le nginx dev → pas de sous-chemin, pas de collision /api,/static,/login
+      # avec la console. superset_config.py = ProxyFix (X-Forwarded-Proto/Host).
+      SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
+      # Connexion à la base SIGDEP pré-provisionnée au boot (rôle lecture seule).
+      # postgres = nom du service Postgres dans ce compose.
+      SIGDEP_DB_URI: postgresql://superset_ro:superset_ro@postgres:5432/sigdep
+    # Un seul appel bash -c. Chaque commande tient sur UNE ligne logique :
+    # create-admin doit rester d'un bloc (sinon bash lit « --username » comme
+    # une commande → « command not found » et l'admin n'est jamais créé).
+    # set-database-uri déclare/maj la source « SIGDEP » → SQL Lab & charts
+    # utilisables immédiatement, sans config manuelle.
+    command:
+      - bash
+      - -c
+      - |
+        superset db upgrade &&
+        (superset fab create-admin --username "$${SUPERSET_ADMIN_USERNAME}" --firstname Admin --lastname SIGDEP --email "$${SUPERSET_ADMIN_EMAIL}" --password "$${SUPERSET_ADMIN_PASSWORD}" || true) &&
+        superset init &&
+        (superset set-database-uri -d "SIGDEP" -u "$${SIGDEP_DB_URI}" || true) &&
+        gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 'superset.app:create_app()'
+    volumes:
+      - superset_home:/app/superset_home
+      # Config Superset (sous-chemin /analytics via X-Forwarded-Prefix).
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+
 volumes:
   postgres_data:
+  superset_home:

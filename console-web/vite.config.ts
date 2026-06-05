@@ -11,8 +11,10 @@ export default defineConfig({
     // Vite ≥ 5.4 rejects requests whose Host header isn't whitelisted.
     // We accept localhost (the canonical dev origin) plus the bare
     // upstream name "vite" as a fallback in case nginx slips and forwards
-    // its own upstream label.
-    allowedHosts: ['localhost', '127.0.0.1', 'vite'],
+    // its own upstream label. lvh.me / *.lvh.me : domaine public résolvant
+    // vers 127.0.0.1, utilisé en dev pour tester le cookie SSO Superset
+    // (Domain=.lvh.me, partagé entre lvh.me et analytics.lvh.me).
+    allowedHosts: ['localhost', '127.0.0.1', 'vite', 'lvh.me', '.lvh.me'],
     proxy: {
       '/api': {
         target: process.env.CONSOLE_API_URL ?? 'http://localhost:8041',

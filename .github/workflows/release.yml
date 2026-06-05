@@ -155,6 +155,12 @@ jobs:
           context: console-web
           file: console-web/Dockerfile
           push: true
+          # VITE_SUPERSET_URL est inliné dans le bundle au build. Définir la
+          # variable de dépôt VITE_SUPERSET_URL (sous-domaine dédié, ex.
+          # https://analytics.<host>/) pour activer le menu « Analyses
+          # avancées » ; vide → menu masqué.
+          build-args: |
+            VITE_SUPERSET_URL=${{ vars.VITE_SUPERSET_URL }}
           tags: |
             ${{ steps.registry.outputs.registry }}/sigdep-console-web:${{ steps.tag.outputs.version }}
             ${{ steps.registry.outputs.registry }}/sigdep-console-web:latest
@@ -180,6 +186,10 @@ jobs:
           cp infra/docker-compose.prod.yml "deploy-build/$PKG/docker-compose.yml"
           cp -r infra/nginx                "deploy-build/$PKG/nginx"
           cp infra/.env.example            "deploy-build/$PKG/.env.example"
+          # Postgres init (rôle lecture seule Superset) + image Superset
+          # (Dockerfile + superset_config.py) référencés par le compose.
+          cp -r infra/postgres             "deploy-build/$PKG/postgres"
+          cp -r infra/superset             "deploy-build/$PKG/superset"
 
           # Pin the image tags of this release inside the bundled .env.example
           # so a site admin only has to fill in secrets, not version numbers.

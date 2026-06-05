@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_OIDC_AUTHORITY?: string;
-  readonly VITE_OIDC_CLIENT_ID?: string;
+  /** URL de l'instance Superset (« Analyses avancées »). Vide → menu masqué. */
+  readonly VITE_SUPERSET_URL?: string;
 }
 
 interface ImportMeta {

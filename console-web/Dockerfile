@@ -24,13 +24,11 @@ COPY index.html ./
 COPY public ./public
 COPY src ./src
 
-# Build-time env vars override defaults in the SPA. Configure at image
-# build time if you need to bake a non-default API origin, otherwise
-# leave them empty and let same-origin nginx routing handle it.
-ARG VITE_OIDC_AUTHORITY=
-ARG VITE_OIDC_CLIENT_ID=
-ENV VITE_OIDC_AUTHORITY=${VITE_OIDC_AUTHORITY}
-ENV VITE_OIDC_CLIENT_ID=${VITE_OIDC_CLIENT_ID}
+# Build-time env vars inlined into the SPA by Vite. VITE_SUPERSET_URL points
+# the « Analyses avancées » menu at the Superset instance ; leave empty to
+# hide the menu. Must be passed at image build time (it's baked in).
+ARG VITE_SUPERSET_URL=
+ENV VITE_SUPERSET_URL=${VITE_SUPERSET_URL}
 
 RUN npm run build
 
@@ -42,7 +40,7 @@ FROM nginx:1.27-alpine AS runtime
 # Drop the default config — the prod nginx.conf at infra/ does the
 # real reverse-proxying ; this image only serves the static SPA on
 # port 80. The upstream nginx (infra/nginx/nginx.prod.conf) routes
-# /, /api, /realms etc. to the appropriate backend.
+# /, /api, /analytics etc. to the appropriate backend.
 RUN rm /etc/nginx/conf.d/default.conf
 COPY console-web.nginx.conf /etc/nginx/conf.d/spa.conf
 
