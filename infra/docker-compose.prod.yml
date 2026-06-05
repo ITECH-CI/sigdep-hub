@@ -16,59 +16,67 @@ services:
     image: postgres:16
     container_name: sigdep-postgres
     environment:
-      POSTGRES_DB:       ${POSTGRES_DB:-sigdep}
-      POSTGRES_USER:     ${POSTGRES_USER:-sigdep}
+      POSTGRES_DB: ${POSTGRES_DB:-sigdep}
+      POSTGRES_USER: ${POSTGRES_USER:-sigdep}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       # Rôle lecture seule pour Superset, créé au 1er boot (si mot de passe fourni).
-      SUPERSET_DB_READONLY_USER:     ${SUPERSET_DB_READONLY_USER:-superset_ro}
+      SUPERSET_DB_READONLY_USER: ${SUPERSET_DB_READONLY_USER:-superset_ro}
       SUPERSET_DB_READONLY_PASSWORD: ${SUPERSET_DB_READONLY_PASSWORD:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Script init exécuté UNE FOIS au premier boot (volume vierge).
       - ./postgres/01-init-superset-readonly.sh:/docker-entrypoint-initdb.d/01-init-superset-readonly.sh:ro
     # No host port exposed in prod — DB is reached over the compose network.
+    # Healthcheck : les API attendent que Postgres ACCEPTE les connexions
+    # (pas seulement que le conteneur soit lancé) → évite un crash au boot.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sigdep} -d ${POSTGRES_DB:-sigdep}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   console-api:
     # Replace with the actual published image (e.g. ghcr.io/itechciv/sigdep-console-api:<tag>).
     image: ${CONSOLE_API_IMAGE:-sigdep-console-api:latest}
     container_name: sigdep-console-api
     environment:
-      SPRING_DATASOURCE_URL:           jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
-      SPRING_DATASOURCE_USERNAME:      ${POSTGRES_USER:-sigdep}
-      SPRING_DATASOURCE_PASSWORD:      ${POSTGRES_PASSWORD:-change-me}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sigdep}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       # Auth v2.0 : clé de signature JWT (>= 32 octets) + seed des comptes
       # d'administration au premier boot (SUPER_ADMIN + IT_ADMIN).
-      SIGDEP_JWT_SECRET:               ${SIGDEP_JWT_SECRET:-change-me-32-bytes-minimum-secret!!}
-      SIGDEP_ADMIN_EMAIL:              ${SIGDEP_ADMIN_EMAIL:-}
-      SIGDEP_ADMIN_PASSWORD:           ${SIGDEP_ADMIN_PASSWORD:-}
-      SIGDEP_IT_ADMIN_EMAIL:           ${SIGDEP_IT_ADMIN_EMAIL:-}
-      SIGDEP_IT_ADMIN_PASSWORD:        ${SIGDEP_IT_ADMIN_PASSWORD:-}
-      APP_CORS_ALLOWED_ORIGINS:        ${PUBLIC_ORIGIN:-https://sigdep.example.org}
+      SIGDEP_JWT_SECRET: ${SIGDEP_JWT_SECRET:-change-me-32-bytes-minimum-secret!!}
+      SIGDEP_ADMIN_EMAIL: ${SIGDEP_ADMIN_EMAIL:-}
+      SIGDEP_ADMIN_PASSWORD: ${SIGDEP_ADMIN_PASSWORD:-}
+      SIGDEP_IT_ADMIN_EMAIL: ${SIGDEP_IT_ADMIN_EMAIL:-}
+      SIGDEP_IT_ADMIN_PASSWORD: ${SIGDEP_IT_ADMIN_PASSWORD:-}
+      APP_CORS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-https://sigdep.example.org}
       # Base des liens dans les emails (mêmes valeur que l'origine publique).
-      SIGDEP_PUBLIC_URL:               ${PUBLIC_ORIGIN:-https://sigdep.example.org}
+      SIGDEP_PUBLIC_URL: ${PUBLIC_ORIGIN:-https://sigdep.example.org}
       # SSO Superset : cookie posé sur le domaine PARENT commun à la console et
       # à analytics.<domaine> (ex. .sigdep.example.org). Secure=true (HTTPS).
-      SIGDEP_SSO_COOKIE_DOMAIN:        ${SIGDEP_SSO_COOKIE_DOMAIN:-}
-      SIGDEP_SSO_COOKIE_SECURE:        ${SIGDEP_SSO_COOKIE_SECURE:-true}
+      SIGDEP_SSO_COOKIE_DOMAIN: ${SIGDEP_SSO_COOKIE_DOMAIN:-}
+      SIGDEP_SSO_COOKIE_SECURE: ${SIGDEP_SSO_COOKIE_SECURE:-true}
       # Emails transactionnels (désactivés par défaut → logués).
-      SIGDEP_MAIL_ENABLED:             ${SIGDEP_MAIL_ENABLED:-false}
-      SIGDEP_MAIL_FROM:                ${SIGDEP_MAIL_FROM:-SIGDEP-3 <no-reply@sigdep.example.org>}
-      SIGDEP_MAIL_HOST:                ${SIGDEP_MAIL_HOST:-}
-      SIGDEP_MAIL_PORT:                ${SIGDEP_MAIL_PORT:-587}
-      SIGDEP_MAIL_USERNAME:            ${SIGDEP_MAIL_USERNAME:-}
-      SIGDEP_MAIL_PASSWORD:            ${SIGDEP_MAIL_PASSWORD:-}
+      SIGDEP_MAIL_ENABLED: ${SIGDEP_MAIL_ENABLED:-false}
+      SIGDEP_MAIL_FROM: ${SIGDEP_MAIL_FROM:-SIGDEP-3 <no-reply@sigdep.example.org>}
+      SIGDEP_MAIL_HOST: ${SIGDEP_MAIL_HOST:-}
+      SIGDEP_MAIL_PORT: ${SIGDEP_MAIL_PORT:-587}
+      SIGDEP_MAIL_USERNAME: ${SIGDEP_MAIL_USERNAME:-}
+      SIGDEP_MAIL_PASSWORD: ${SIGDEP_MAIL_PASSWORD:-}
       # Chiffrement : STARTTLS (587, défaut) ou SSL implicite (465).
-      SIGDEP_MAIL_STARTTLS:            ${SIGDEP_MAIL_STARTTLS:-true}
-      SIGDEP_MAIL_SSL:                 ${SIGDEP_MAIL_SSL:-false}
+      SIGDEP_MAIL_STARTTLS: ${SIGDEP_MAIL_STARTTLS:-true}
+      SIGDEP_MAIL_SSL: ${SIGDEP_MAIL_SSL:-false}
       # Faire confiance au certificat du serveur SMTP (host, ou "*").
       # Office365 : SIGDEP_MAIL_SSL_TRUST=smtp.office365.com.
-      SIGDEP_MAIL_SSL_TRUST:           ${SIGDEP_MAIL_SSL_TRUST:-}
+      SIGDEP_MAIL_SSL_TRUST: ${SIGDEP_MAIL_SSL_TRUST:-}
     # console-api valide le schéma JPA au démarrage (auth.users, auth.api_keys…)
     # mais c'est ingestion-api qui applique les migrations Liquibase. Sur une
     # base vierge, attendre qu'il soit healthy évite un crash « missing table ».
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       ingestion-api:
         condition: service_healthy
 
@@ -76,10 +84,12 @@ services:
     image: ${INGESTION_API_IMAGE:-sigdep-ingestion-api:latest}
     container_name: sigdep-ingestion-api
     environment:
-      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sigdep}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sigdep}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-    depends_on: [postgres]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   console-web:
     # Sert le bundle Vite + sa propre config nginx (history fallback,
@@ -107,11 +117,11 @@ services:
       # Compte admin Superset créé au 1er boot.
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
-      SUPERSET_ADMIN_EMAIL:    ${SUPERSET_ADMIN_EMAIL:-admin@sigdep.example.org}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@sigdep.example.org}
       # Servi à la racine d'un vhost dédié (server_name analytics.<host> dans
       # nginx.prod.conf) → pas de sous-chemin, pas de collision /api,/static,
       # /login avec la console. ProxyFix via superset_config.py.
-      SUPERSET_CONFIG_PATH:    /app/pythonpath/superset_config.py
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
       # URI de la base SIGDEP (rôle lecture seule) pré-provisionnée au boot.
       SIGDEP_DB_URI: postgresql://${SUPERSET_DB_READONLY_USER:-superset_ro}:${SUPERSET_DB_READONLY_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-sigdep}
     # Bootstrap : upgrade métadonnées + admin + init rôles + déclare la source
@@ -132,7 +142,10 @@ services:
       - superset_home:/app/superset_home
       # Config Superset (ProxyFix derrière le nginx front).
       - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
-    depends_on: [postgres]
+    # Attend Postgres prêt : set-database-uri (source SIGDEP) tourne au boot.
+    depends_on:
+      postgres:
+        condition: service_healthy
     # Pas de port host exposé : le nginx front (vhost analytics.<host>) route
     # vers superset:8088.
 

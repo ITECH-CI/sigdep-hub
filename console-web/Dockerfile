@@ -48,5 +48,9 @@ COPY --from=build /build/dist /usr/share/nginx/html
 
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD wget -q -O - http://localhost/index.html >/dev/null || exit 1
+# Cibler 127.0.0.1 (IPv4) et NON localhost : sur Alpine, wget résout d'abord
+# localhost en ::1 (IPv6), or notre conf SPA n'écoute que sur IPv4 (le script
+# 10-listen-on-ipv6-by-default.sh ne patche pas notre conf custom) → le
+# healthcheck échouait en « Connection refused ».
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 --start-period=10s \
+  CMD wget -q -O - http://127.0.0.1/index.html >/dev/null || exit 1
