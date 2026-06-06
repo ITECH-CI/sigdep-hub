@@ -82,7 +82,11 @@ class SigdepRemoteUserSecurityManager(SupersetSecurityManager):
         target_role_name = self._sigdep_superset_role()
         role = self.find_role(target_role_name) or self.find_role(DEFAULT_SUPERSET_ROLE)
 
-        user = self.find_user(username=username)
+        # Chercher par username ET par email : l'admin Superset bootstrap peut
+        # déjà exister avec le même email (ex. SUPERSET_ADMIN_EMAIL ==
+        # SIGDEP_ADMIN_EMAIL). Créer un doublon → UNIQUE constraint sur
+        # ab_user.email → échec de connexion → boucle de redirection.
+        user = self.find_user(username=username) or self.find_user(email=username)
         if user is None:
             user = self.add_user(
                 username=username,
@@ -96,7 +100,10 @@ class SigdepRemoteUserSecurityManager(SupersetSecurityManager):
                 return None
         else:
             # Réaligne le rôle à chaque connexion (le rôle SIGDEP fait foi).
-            if role and (len(user.roles) != 1 or user.roles[0].id != role.id):
+            # NB : on NE touche PAS au compte si c'est déjà un Admin local
+            # (admin bootstrap Superset) — on garde son accès complet.
+            if role and not any(r.name == "Admin" for r in user.roles) \
+                    and (len(user.roles) != 1 or user.roles[0].id != role.id):
                 user.roles = [role]
                 self.update_user(user)
 
