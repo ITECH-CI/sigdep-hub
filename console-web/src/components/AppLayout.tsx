@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth";
 import { GlobalLoader } from "./GlobalLoader";
+import { Footer } from "./Footer";
 
 type NavItem = {
   to: string;
@@ -223,8 +224,11 @@ export function AppLayout() {
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1">
+            <Outlet />
+          </div>
+          <Footer className="border-t border-slate-200" />
         </main>
       </div>
     </div>

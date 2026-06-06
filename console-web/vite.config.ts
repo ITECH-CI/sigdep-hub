@@ -1,8 +1,19 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Métadonnées de build affichées dans le footer. Fournies par la CI au build
+// (variables d'env) ; valeurs « dev » par défaut en local. Inlinées via define.
+const APP_VERSION = process.env.APP_VERSION ?? 'dev';
+const APP_COMMIT = process.env.APP_COMMIT ?? 'local';
+const APP_BUILD_DATE = process.env.APP_BUILD_DATE ?? '';
+
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __APP_COMMIT__: JSON.stringify(APP_COMMIT),
+    __APP_BUILD_DATE__: JSON.stringify(APP_BUILD_DATE),
+  },
   server: {
     port: 5173,
     // Bind on 0.0.0.0 so the nginx container can reach the dev server via

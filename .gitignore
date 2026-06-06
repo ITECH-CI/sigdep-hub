@@ -29,3 +29,7 @@ infra/nginx/certs/
 
 # Logs
 *.log
+
+# flatten-maven-plugin (généré au build, version ${revision})
+.flattened-pom.xml
+**/.flattened-pom.xml

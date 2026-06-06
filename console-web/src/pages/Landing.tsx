@@ -158,10 +158,26 @@ export function Landing() {
       <footer className="mt-12 border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-6 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <PartnerLogos size="sm" />
-          <p className="text-xs text-ink-subtle">
-            Ministère de la Santé de l'Hygiène Publique et de la Couverture
-            Maladie Universelle · PNLS · 2026
-          </p>
+          <div className="text-xs text-ink-subtle sm:text-right">
+            <p>
+              Ministère de la Santé de l'Hygiène Publique et de la Couverture
+              Maladie Universelle · PNLS · 2026
+            </p>
+            <p
+              className="mt-1 text-slate-400"
+              title={`Version ${__APP_VERSION__}${
+                __APP_COMMIT__ ? ` · build ${__APP_COMMIT__}` : ""
+              }`}
+            >
+              {[
+                `v${__APP_VERSION__}`,
+                __APP_COMMIT__ && __APP_COMMIT__ !== "local" ? __APP_COMMIT__ : null,
+                __APP_BUILD_DATE__ || null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
         </div>
       </footer>
     </div>

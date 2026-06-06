@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotPassword } from '../api/auth';
+import { Footer } from '../components/Footer';
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -93,6 +94,7 @@ export function AuthShell({ title, children }:
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

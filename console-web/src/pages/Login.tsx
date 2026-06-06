@@ -152,6 +152,20 @@ export function Login() {
             Ministère de la Santé, de l'Hygiène Publique et de la Couverture
             Maladie Universelle · PNLS · 2026
           </p>
+          <p
+            className="mt-1 text-center text-xs text-slate-400"
+            title={`Version ${__APP_VERSION__}${
+              __APP_COMMIT__ ? ` · build ${__APP_COMMIT__}` : ''
+            }`}
+          >
+            {[
+              `v${__APP_VERSION__}`,
+              __APP_COMMIT__ && __APP_COMMIT__ !== 'local' ? __APP_COMMIT__ : null,
+              __APP_BUILD_DATE__ || null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
         </div>
       </footer>
     </div>
