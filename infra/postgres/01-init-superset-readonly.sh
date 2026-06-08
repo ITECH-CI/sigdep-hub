@@ -1,15 +1,16 @@
 #!/bin/bash
-# Crée un rôle PostgreSQL en LECTURE SEULE pour Superset, et lui accorde
-# l'accès SELECT aux schémas analytiques de la base SIGDEP. Exécuté UNE SEULE
-# FOIS au premier démarrage de Postgres (volume de données vierge), via
-# /docker-entrypoint-initdb.d/.
+# Crée le RÔLE PostgreSQL en lecture seule pour Superset. Exécuté UNE SEULE FOIS
+# au premier démarrage de Postgres (volume vierge), via docker-entrypoint-initdb.d/.
+#
+# IMPORTANT : ce script ne fait QUE créer le rôle + GRANT CONNECT. Il n'accorde
+# PAS l'accès aux schémas core/analytics ici, car ils n'existent pas encore au
+# premier boot (c'est Liquibase, au démarrage d'ingestion-api, qui les crée).
+# Les droits SELECT sur core/analytics sont accordés par une migration Liquibase
+# dédiée (changeset « superset-readonly-grants »), une fois les schémas créés.
 #
 # Paramétré par variables d'environnement (cf. docker-compose / .env) :
 #   SUPERSET_DB_READONLY_USER     (défaut: superset_ro)
 #   SUPERSET_DB_READONLY_PASSWORD (OBLIGATOIRE pour activer la création)
-#
-# Si le mot de passe est vide, le script ne fait rien (Superset pourra être
-# connecté manuellement plus tard).
 set -euo pipefail
 
 RO_USER="${SUPERSET_DB_READONLY_USER:-superset_ro}"
@@ -23,7 +24,8 @@ fi
 echo "[init-superset] Création du rôle lecture seule '$RO_USER' sur la base '$POSTGRES_DB'…"
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<SQL
--- Rôle de connexion en lecture seule (idempotent).
+-- Rôle de connexion en lecture seule (idempotent). Les GRANT sur les schémas
+-- analytiques sont appliqués plus tard par Liquibase (cf. en-tête).
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RO_USER}') THEN
@@ -34,15 +36,7 @@ BEGIN
 END
 \$\$;
 
--- Accès en lecture aux schémas analytiques (PAS au schéma auth : Superset
--- ne doit jamais lire les hash de mots de passe ni les clés API).
 GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO ${RO_USER};
-GRANT USAGE ON SCHEMA core, analytics TO ${RO_USER};
-GRANT SELECT ON ALL TABLES IN SCHEMA core, analytics TO ${RO_USER};
-
--- Les tables créées plus tard (nouvelles migrations) seront aussi lisibles.
-ALTER DEFAULT PRIVILEGES IN SCHEMA core      GRANT SELECT ON TABLES TO ${RO_USER};
-ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO ${RO_USER};
 SQL
 
-echo "[init-superset] Rôle '$RO_USER' prêt (SELECT sur core + analytics, schéma auth exclu)."
+echo "[init-superset] Rôle '$RO_USER' créé (droits sur core/analytics via Liquibase)."

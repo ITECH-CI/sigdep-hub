@@ -50,4 +50,7 @@
     <include file="db/changelog/v2.0/039-api-keys-unique-active.xml"/>
     <include file="db/changelog/v2.0/040-add-users-password-expiry.xml"/>
 
+    <!-- v2.1 — droits lecture seule Superset (après création des schémas) -->
+    <include file="db/changelog/v2.1/041-superset-readonly-grants.xml"/>
+
 </databaseChangeLog>
