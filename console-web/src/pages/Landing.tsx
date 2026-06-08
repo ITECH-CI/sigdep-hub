@@ -13,6 +13,7 @@ import {
 import { fetchPublicKpis } from "../api/client";
 import { Kpi, formatInt, formatPercent } from "../components/Kpi";
 import { PartnerLogos } from "../components/PartnerLogos";
+import { buildLabel } from "../components/Footer";
 
 const NATIONAL_TARGET_SITES = 549; // see runs_sigdep flag — not yet backfilled
 
@@ -158,10 +159,13 @@ export function Landing() {
       <footer className="mt-12 border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-6 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <PartnerLogos size="sm" />
-          <p className="text-xs text-ink-subtle">
-            Ministère de la Santé de l'Hygiène Publique et de la Couverture
-            Maladie Universelle · PNLS · 2026
-          </p>
+          <div className="text-xs text-ink-subtle sm:text-right">
+            <p>
+              Ministère de la Santé de l'Hygiène Publique et de la Couverture
+              Maladie Universelle · PNLS · 2026
+            </p>
+            <p className="mt-1 text-slate-400">{buildLabel()}</p>
+          </div>
         </div>
       </footer>
     </div>

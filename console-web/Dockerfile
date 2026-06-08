@@ -30,6 +30,15 @@ COPY src ./src
 ARG VITE_SUPERSET_URL=
 ENV VITE_SUPERSET_URL=${VITE_SUPERSET_URL}
 
+# Métadonnées de build affichées dans le footer (version = tag, commit, date).
+# Fournies par la CI ; défauts « dev » si build local sans args.
+ARG APP_VERSION=dev
+ARG APP_COMMIT=local
+ARG APP_BUILD_DATE=
+ENV APP_VERSION=${APP_VERSION}
+ENV APP_COMMIT=${APP_COMMIT}
+ENV APP_BUILD_DATE=${APP_BUILD_DATE}
+
 RUN npm run build
 
 # ---------------------------------------------------------------------------

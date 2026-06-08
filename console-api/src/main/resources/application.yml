@@ -103,3 +103,10 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  health:
+    # Le mailHealthIndicator teste le SMTP à CHAQUE /actuator/health. Un SMTP
+    # externe injoignable (ou trust manquant) rendrait alors l'API « DOWN » →
+    # conteneur unhealthy → blocage du déploiement, alors que l'API fonctionne.
+    # On exclut donc le mail de la santé : l'envoi reste best-effort côté code.
+    mail:
+      enabled: false

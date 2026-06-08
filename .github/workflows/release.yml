@@ -36,6 +36,13 @@ jobs:
           echo "tag=$ref" >> $GITHUB_OUTPUT
           echo "version=${ref#v}" >> $GITHUB_OUTPUT
 
+      # Métadonnées de build affichées dans le footer (SHA court + date).
+      - name: Build metadata
+        id: meta
+        run: |
+          echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       # Compute the image registry now (rather than as a static env)
       # because docker requires lowercase repository names and
       # github.repository_owner can be mixed-case ("Pkom17").
@@ -88,7 +95,8 @@ jobs:
         run: mvn -B -DskipTests install
 
       - name: Build hub fat jars
-        run: mvn -B -DskipTests package
+        # -Drevision = la version du tag → portée par les jars et l'actuator/info.
+        run: mvn -B -DskipTests -Drevision=${{ steps.tag.outputs.version }} package
 
       # ---------- SPA build (Vite) ----------------------------------------
       - name: Set up Node 20
@@ -161,6 +169,9 @@ jobs:
           # avancées » ; vide → menu masqué.
           build-args: |
             VITE_SUPERSET_URL=${{ vars.VITE_SUPERSET_URL }}
+            APP_VERSION=${{ steps.tag.outputs.version }}
+            APP_COMMIT=${{ steps.meta.outputs.sha }}
+            APP_BUILD_DATE=${{ steps.meta.outputs.date }}
           tags: |
             ${{ steps.registry.outputs.registry }}/sigdep-console-web:${{ steps.tag.outputs.version }}
             ${{ steps.registry.outputs.registry }}/sigdep-console-web:latest

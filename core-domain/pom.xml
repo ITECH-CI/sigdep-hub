@@ -7,7 +7,7 @@
     <parent>
         <groupId>ci.itechciv.sigdep</groupId>
         <artifactId>sigdep-hub-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>core-domain</artifactId>

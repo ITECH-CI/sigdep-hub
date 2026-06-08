@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { PasswordInput } from '../components/PasswordInput';
 import { PartnerLogos } from '../components/PartnerLogos';
+import { buildLabel } from '../components/Footer';
 
 type LocationState = { from?: string } | null;
 
@@ -151,6 +152,9 @@ export function Login() {
           <p className="text-xs text-ink-subtle text-center">
             Ministère de la Santé, de l'Hygiène Publique et de la Couverture
             Maladie Universelle · PNLS · 2026
+          </p>
+          <p className="mt-1 text-center text-xs text-slate-400">
+            {buildLabel()}
           </p>
         </div>
       </footer>
