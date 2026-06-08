@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import pkg from './package.json' assert { type: 'json' };
 
-// Métadonnées de build affichées dans le footer. Fournies par la CI au build
-// (variables d'env) ; valeurs « dev » par défaut en local. Inlinées via define.
-const APP_VERSION = process.env.APP_VERSION ?? 'dev';
+// Métadonnées de build affichées dans le footer. En prod, la CI fournit
+// APP_VERSION (= tag), APP_COMMIT (sha court) et APP_BUILD_DATE. En dev (pas de
+// CI), on retombe sur la version déclarée dans package.json et « local ».
+const APP_VERSION = process.env.APP_VERSION ?? pkg.version;
 const APP_COMMIT = process.env.APP_COMMIT ?? 'local';
 const APP_BUILD_DATE = process.env.APP_BUILD_DATE ?? '';
 

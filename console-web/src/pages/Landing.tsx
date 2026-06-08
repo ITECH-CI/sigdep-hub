@@ -13,6 +13,7 @@ import {
 import { fetchPublicKpis } from "../api/client";
 import { Kpi, formatInt, formatPercent } from "../components/Kpi";
 import { PartnerLogos } from "../components/PartnerLogos";
+import { buildLabel } from "../components/Footer";
 
 const NATIONAL_TARGET_SITES = 549; // see runs_sigdep flag — not yet backfilled
 
@@ -163,20 +164,7 @@ export function Landing() {
               Ministère de la Santé de l'Hygiène Publique et de la Couverture
               Maladie Universelle · PNLS · 2026
             </p>
-            <p
-              className="mt-1 text-slate-400"
-              title={`Version ${__APP_VERSION__}${
-                __APP_COMMIT__ ? ` · build ${__APP_COMMIT__}` : ""
-              }`}
-            >
-              {[
-                `v${__APP_VERSION__}`,
-                __APP_COMMIT__ && __APP_COMMIT__ !== "local" ? __APP_COMMIT__ : null,
-                __APP_BUILD_DATE__ || null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
+            <p className="mt-1 text-slate-400">{buildLabel()}</p>
           </div>
         </div>
       </footer>

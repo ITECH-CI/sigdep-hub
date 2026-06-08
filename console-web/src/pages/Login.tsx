@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { PasswordInput } from '../components/PasswordInput';
 import { PartnerLogos } from '../components/PartnerLogos';
+import { buildLabel } from '../components/Footer';
 
 type LocationState = { from?: string } | null;
 
@@ -152,19 +153,8 @@ export function Login() {
             Ministère de la Santé, de l'Hygiène Publique et de la Couverture
             Maladie Universelle · PNLS · 2026
           </p>
-          <p
-            className="mt-1 text-center text-xs text-slate-400"
-            title={`Version ${__APP_VERSION__}${
-              __APP_COMMIT__ ? ` · build ${__APP_COMMIT__}` : ''
-            }`}
-          >
-            {[
-              `v${__APP_VERSION__}`,
-              __APP_COMMIT__ && __APP_COMMIT__ !== 'local' ? __APP_COMMIT__ : null,
-              __APP_BUILD_DATE__ || null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+          <p className="mt-1 text-center text-xs text-slate-400">
+            {buildLabel()}
           </p>
         </div>
       </footer>

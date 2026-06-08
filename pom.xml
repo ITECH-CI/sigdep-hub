@@ -30,8 +30,9 @@
     <properties>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Version du projet (surchargée par -Drevision=<tag> en CI). -->
-        <revision>0.1.0-SNAPSHOT</revision>
+        <!-- Version du projet (surchargée par -Drevision=<tag> en CI). En dev,
+             refléter la prochaine release pour un footer/actuator cohérent. -->
+        <revision>2.1.1-SNAPSHOT</revision>
 
         <sigdep-contracts.version>0.1.0-SNAPSHOT</sigdep-contracts.version>
         <liquibase.version>4.29.2</liquibase.version>

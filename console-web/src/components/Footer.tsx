@@ -9,23 +9,25 @@ const VERSION = __APP_VERSION__;
 const COMMIT = __APP_COMMIT__;
 const BUILD_DATE = __APP_BUILD_DATE__;
 
-export function Footer({ className = '' }: Readonly<{ className?: string }>) {
-  // Construit "v2.1.2 · a3c4c4c · 2026-06-06" en omettant les parties vides.
-  const parts = [
-    `v${VERSION}`,
+/** "v2.1.1 · build a3c4c4c · 2026-06-08", parties vides omises. */
+export function buildLabel(): string {
+  const build = [
     COMMIT && COMMIT !== 'local' ? COMMIT : null,
     BUILD_DATE || null,
   ].filter(Boolean);
+  const parts = [`v${VERSION}`];
+  if (build.length) parts.push(`build ${build.join(' · ')}`);
+  return parts.join(' · ');
+}
 
+export function Footer({ className = '' }: Readonly<{ className?: string }>) {
   return (
     <footer
       className={`px-4 py-3 text-center text-xs text-slate-400 ${className}`}
     >
       <span>SIGDEP-3 — PNLS Côte d’Ivoire</span>
       <span className="mx-2 text-slate-300">•</span>
-      <span title={`Version ${VERSION}${COMMIT ? ` · build ${COMMIT}` : ''}`}>
-        {parts.join(' · ')}
-      </span>
+      <span title={buildLabel()}>{buildLabel()}</span>
     </footer>
   );
 }
