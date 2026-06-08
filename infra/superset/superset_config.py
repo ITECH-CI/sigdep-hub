@@ -15,6 +15,14 @@ log = logging.getLogger(__name__)
 # Clé secrète (fournie par l'env, défaut dev). NE PAS réutiliser en prod.
 SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "dev-only-change-me")
 
+# Base de MÉTADONNÉES de Superset (dashboards, état SQL Lab, utilisateurs FAB…).
+# PostgreSQL plutôt que SQLite (défaut) : SQLite échoue sur les écritures
+# concurrentes en multi-worker → « Impossible de migrer l'état de l'éditeur de
+# requêtes ». Si SUPERSET_METADATA_DB_URI est absent, on retombe sur le défaut.
+_metadata_uri = os.environ.get("SUPERSET_METADATA_DB_URI")
+if _metadata_uri:
+    SQLALCHEMY_DATABASE_URI = _metadata_uri
+
 # Interface en français par défaut (Superset est traduit via Flask-Babel).
 # L'utilisateur peut toujours basculer la langue depuis son menu profil.
 BABEL_DEFAULT_LOCALE = "fr"
