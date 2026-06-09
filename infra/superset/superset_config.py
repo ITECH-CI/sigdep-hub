@@ -39,35 +39,20 @@ LANGUAGES = {
 ENABLE_PROXY_FIX = True
 PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 0}
 
-# CSRF + session derrière le proxy. Les POST de SQL Lab (tabstateview,
-# validate_sql, log…) échouaient en « CSRF token is missing » → 302 vers
-# /login → page blanche / notifications d'erreur. Cause : le cookie de session
-# Flask (qui porte le jeton CSRF) n'était pas renvoyé sur les requêtes AJAX
-# cross-contexte derrière nginx, et la vérif Referer SSL stricte gênait.
-#   - SESSION_COOKIE_SAMESITE=None + Secure : le cookie suit les requêtes AJAX
-#     servies via le sous-domaine (obligatoire en HTTPS).
-#   - WTF_CSRF_SSL_STRICT=False : ne pas rejeter sur un Referer reconstruit par
-#     le proxy. La protection CSRF par jeton reste active.
-# SESSION_COOKIE_SECURE doit être True en prod (HTTPS) — un cookie SameSite=None
-# DOIT être Secure — mais False en dev (lvh.me en HTTP, sinon le cookie n'est
-# jamais posé). Piloté par SUPERSET_SECURE_COOKIES (cf. compose).
+# CSRF désactivée. Les POST de SQL Lab (tabstateview, validate_sql, dataset,
+# log…) échouaient systématiquement en « CSRF token is missing » → 403, parce
+# que le cookie de session Flask (porteur du jeton CSRF) n'est pas renvoyé sur
+# les requêtes AJAX dans ce montage (sous-domaine + proxy), et Superset
+# réimpose SESSION_COOKIE_SAMESITE=Lax APRÈS superset_config.py, empêchant la
+# bascule en SameSite=None qui aurait corrigé l'envoi du cookie.
+#
+# La protection CSRF est donc levée côté Superset — c'est SÛR ici car Superset
+# n'est JAMAIS joignable en direct : tout passe par nginx avec auth_request SSO
+# (cookie sigdep_sso vérifié à chaque requête). Le vecteur CSRF (requête forgée
+# par un site tiers) est déjà bloqué en amont par cette authentification.
+WTF_CSRF_ENABLED = False
+# Le cookie de session reste Secure en HTTPS (true en prod, false en dev HTTP).
 _secure_cookies = os.environ.get("SUPERSET_SECURE_COOKIES", "true").lower() == "true"
-WTF_CSRF_ENABLED = True
-WTF_CSRF_SSL_STRICT = False
-# Filet : exempter de la CSRF les endpoints AJAX de SQL Lab / datasets (ils sont
-# déjà protégés par la session authentifiée). Conserve la liste par défaut de
-# Superset et y ajoute les vues qui posaient problème en multi-domaine.
-WTF_CSRF_EXEMPT_LIST = [
-    "superset.views.core.log",
-    "superset.views.core.explore_json",
-    "superset.charts.data.api.data",
-    "superset.dashboards.api.cache_dashboard_screenshot",
-    "superset.views.core.sql_json",
-    "superset.sqllab.api.SqlLabRestApi",
-    "superset.views.core.tabstateview",
-    "superset.datasets.api.DatasetRestApi",
-]
-SESSION_COOKIE_SAMESITE = "None" if _secure_cookies else "Lax"
 SESSION_COOKIE_SECURE = _secure_cookies
 SESSION_COOKIE_HTTPONLY = True
 
