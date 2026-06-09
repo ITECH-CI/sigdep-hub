@@ -54,6 +54,19 @@ PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 0}
 _secure_cookies = os.environ.get("SUPERSET_SECURE_COOKIES", "true").lower() == "true"
 WTF_CSRF_ENABLED = True
 WTF_CSRF_SSL_STRICT = False
+# Filet : exempter de la CSRF les endpoints AJAX de SQL Lab / datasets (ils sont
+# déjà protégés par la session authentifiée). Conserve la liste par défaut de
+# Superset et y ajoute les vues qui posaient problème en multi-domaine.
+WTF_CSRF_EXEMPT_LIST = [
+    "superset.views.core.log",
+    "superset.views.core.explore_json",
+    "superset.charts.data.api.data",
+    "superset.dashboards.api.cache_dashboard_screenshot",
+    "superset.views.core.sql_json",
+    "superset.sqllab.api.SqlLabRestApi",
+    "superset.views.core.tabstateview",
+    "superset.datasets.api.DatasetRestApi",
+]
 SESSION_COOKIE_SAMESITE = "None" if _secure_cookies else "Lax"
 SESSION_COOKIE_SECURE = _secure_cookies
 SESSION_COOKIE_HTTPONLY = True
