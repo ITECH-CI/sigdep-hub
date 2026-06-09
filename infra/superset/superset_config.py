@@ -102,6 +102,16 @@ class SigdepRemoteUserSecurityManager(SupersetSecurityManager):
         sigdep_role = (request.headers.get(REMOTE_ROLE_HEADER) or "").strip()
         return SIGDEP_ROLE_MAP.get(sigdep_role, DEFAULT_SUPERSET_ROLE)
 
+    def load_user(self, pk):
+        # Robustesse : un cookie de session peut référencer un user_id qui
+        # n'existe plus (base de métadonnées réinitialisée, utilisateur supprimé).
+        # FAB ferait alors `None.is_active` → 500. On renvoie None proprement :
+        # l'utilisateur sera ré-authentifié via l'en-tête X-Remote-User.
+        try:
+            return super().load_user(pk)
+        except AttributeError:
+            return None
+
     def auth_user_remote_user(self, username):
         # username = valeur de REMOTE_USER (posée par FAB depuis l'en-tête).
         if not username:
