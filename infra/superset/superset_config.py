@@ -39,6 +39,38 @@ LANGUAGES = {
 ENABLE_PROXY_FIX = True
 PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 0}
 
+# CSRF + session derrière le proxy. Les POST de SQL Lab (tabstateview,
+# validate_sql, log…) échouaient en « CSRF token is missing » → 302 vers
+# /login → page blanche / notifications d'erreur. Cause : le cookie de session
+# Flask (qui porte le jeton CSRF) n'était pas renvoyé sur les requêtes AJAX
+# cross-contexte derrière nginx, et la vérif Referer SSL stricte gênait.
+#   - SESSION_COOKIE_SAMESITE=None + Secure : le cookie suit les requêtes AJAX
+#     servies via le sous-domaine (obligatoire en HTTPS).
+#   - WTF_CSRF_SSL_STRICT=False : ne pas rejeter sur un Referer reconstruit par
+#     le proxy. La protection CSRF par jeton reste active.
+# SESSION_COOKIE_SECURE doit être True en prod (HTTPS) — un cookie SameSite=None
+# DOIT être Secure — mais False en dev (lvh.me en HTTP, sinon le cookie n'est
+# jamais posé). Piloté par SUPERSET_SECURE_COOKIES (cf. compose).
+_secure_cookies = os.environ.get("SUPERSET_SECURE_COOKIES", "true").lower() == "true"
+WTF_CSRF_ENABLED = True
+WTF_CSRF_SSL_STRICT = False
+# Filet : exempter de la CSRF les endpoints AJAX de SQL Lab / datasets (ils sont
+# déjà protégés par la session authentifiée). Conserve la liste par défaut de
+# Superset et y ajoute les vues qui posaient problème en multi-domaine.
+WTF_CSRF_EXEMPT_LIST = [
+    "superset.views.core.log",
+    "superset.views.core.explore_json",
+    "superset.charts.data.api.data",
+    "superset.dashboards.api.cache_dashboard_screenshot",
+    "superset.views.core.sql_json",
+    "superset.sqllab.api.SqlLabRestApi",
+    "superset.views.core.tabstateview",
+    "superset.datasets.api.DatasetRestApi",
+]
+SESSION_COOKIE_SAMESITE = "None" if _secure_cookies else "Lax"
+SESSION_COOKIE_SECURE = _secure_cookies
+SESSION_COOKIE_HTTPONLY = True
+
 # ===========================================================================
 # SSO « header de confiance » avec la console SIGDEP.
 #
@@ -82,6 +114,16 @@ class SigdepRemoteUserSecurityManager(SupersetSecurityManager):
     def _sigdep_superset_role(self):
         sigdep_role = (request.headers.get(REMOTE_ROLE_HEADER) or "").strip()
         return SIGDEP_ROLE_MAP.get(sigdep_role, DEFAULT_SUPERSET_ROLE)
+
+    def load_user(self, pk):
+        # Robustesse : un cookie de session peut référencer un user_id qui
+        # n'existe plus (base de métadonnées réinitialisée, utilisateur supprimé).
+        # FAB ferait alors `None.is_active` → 500. On renvoie None proprement :
+        # l'utilisateur sera ré-authentifié via l'en-tête X-Remote-User.
+        try:
+            return super().load_user(pk)
+        except AttributeError:
+            return None
 
     def auth_user_remote_user(self, username):
         # username = valeur de REMOTE_USER (posée par FAB depuis l'en-tête).

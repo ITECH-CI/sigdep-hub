@@ -71,18 +71,21 @@ fi
 # this directory alone would resolve core-domain from ~/.m2 and miss recent
 # changes — that's a frequent foot-gun.
 if [[ "${1:-}" == "--dev" ]]; then
-  # First reinstall dependent modules (core-domain) so that any uncommitted
-  # change is picked up before spring-boot:run resolves it from ~/.m2.
-  # We only install core-domain — installing the API modules triggers the
-  # spring-boot repackage step which needs JDK 17 in the spawned shell and
-  # is unnecessary here (we run from target/classes via spring-boot:run).
-  ( cd .. && mvn -B -DskipTests -pl core-domain install )
+  # Reinstall the parent POM + core-domain so spring-boot:run resolves them
+  # from ~/.m2 with recent changes. -am pulls the parent into the reactor:
+  # with the project version driven by ${revision} (flatten-maven-plugin),
+  # the parent MUST be installed too, otherwise resolving core-domain fails
+  # with "sigdep-hub-parent:pom:<version> (absent)". Installing -pl core-domain
+  # alone is the foot-gun here.
+  ( cd .. && mvn -B -DskipTests -pl core-domain -am install )
   exec mvn -B spring-boot:run
 fi
 
-JAR=target/console-api-0.1.0-SNAPSHOT.jar
-if [[ ! -f "$JAR" ]]; then
-  echo "ERROR: $JAR not found. Run 'mvn -DskipTests package' from sigdep-hub/ first."
+# Pick the built fat jar whatever its version (driven by ${revision}). Exclude
+# the *.original Spring Boot leaves behind.
+JAR=$(ls target/console-api-*.jar 2>/dev/null | grep -v '\.original$' | head -1)
+if [[ -z "$JAR" || ! -f "$JAR" ]]; then
+  echo "ERROR: no console-api-*.jar in target/. Run 'mvn -DskipTests package' from sigdep-hub/ first."
   exit 1
 fi
 

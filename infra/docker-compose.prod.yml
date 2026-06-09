@@ -118,6 +118,9 @@ services:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change-me-superset-secret-key}
       # Métadonnées Superset sur PostgreSQL (évite les erreurs SQLite multi-worker).
       SUPERSET_METADATA_DB_URI: postgresql://${SUPERSET_META_USER:-superset_meta}:${SUPERSET_META_PASSWORD:-}@postgres:5432/${SUPERSET_META_DB:-superset_meta}
+      # Prod en HTTPS → cookies de session Secure + SameSite=None (requis pour
+      # que SQL Lab — POST AJAX cross-contexte — garde la session/le jeton CSRF).
+      SUPERSET_SECURE_COOKIES: "true"
       # Compte admin Superset créé au 1er boot.
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
