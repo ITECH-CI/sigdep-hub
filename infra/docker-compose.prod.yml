@@ -22,6 +22,10 @@ services:
       # Rôle lecture seule pour Superset, créé au 1er boot (si mot de passe fourni).
       SUPERSET_DB_READONLY_USER: ${SUPERSET_DB_READONLY_USER:-superset_ro}
       SUPERSET_DB_READONLY_PASSWORD: ${SUPERSET_DB_READONLY_PASSWORD:-}
+      # Base + rôle de métadonnées Superset (en écriture), créés au 1er boot.
+      SUPERSET_META_DB: ${SUPERSET_META_DB:-superset_meta}
+      SUPERSET_META_USER: ${SUPERSET_META_USER:-superset_meta}
+      SUPERSET_META_PASSWORD: ${SUPERSET_META_PASSWORD:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Script init exécuté UNE FOIS au premier boot (volume vierge).
@@ -99,10 +103,8 @@ services:
     # Pas de port host exposé : le nginx front est seul à sortir sur
     # 443. console-web ne répond qu'au réseau interne du compose.
 
-  # Apache Superset — « Analyses avancées ». Login séparé (pas de SSO en
-  # phase 1). Métadonnées Superset persistées dans un volume (SQLite par
-  # défaut). À connecter à la base SIGDEP via le rôle lecture seule
-  # superset_ro (URI : postgresql://superset_ro:<pwd>@postgres:5432/sigdep).
+  # Apache Superset — « Analyses avancées ». Métadonnées dans PostgreSQL
+  # (base superset_meta), données SIGDEP via le rôle lecture seule superset_ro.
   superset:
     # Image officielle + driver PostgreSQL (cf. superset/Dockerfile). L'image
     # apache/superset n'embarque AUCUN driver tiers → sans ça, impossible de
@@ -114,6 +116,8 @@ services:
     environment:
       # Clé secrète Superset — OBLIGATOIRE, à générer (openssl rand -base64 42).
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change-me-superset-secret-key}
+      # Métadonnées Superset sur PostgreSQL (évite les erreurs SQLite multi-worker).
+      SUPERSET_METADATA_DB_URI: postgresql://${SUPERSET_META_USER:-superset_meta}:${SUPERSET_META_PASSWORD:-}@postgres:5432/${SUPERSET_META_DB:-superset_meta}
       # Compte admin Superset créé au 1er boot.
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}

@@ -290,22 +290,36 @@ Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
    SUPERSET_ADMIN_USERNAME=admin
    SUPERSET_ADMIN_PASSWORD=<mot_de_passe_fort>
    SUPERSET_ADMIN_EMAIL=admin@pnls.ci
+   # Rôle lecture seule sur les données SIGDEP (core + analytics).
    SUPERSET_DB_READONLY_USER=superset_ro
    SUPERSET_DB_READONLY_PASSWORD=<mot_de_passe_fort>
+   # Base de métadonnées Superset (PostgreSQL, pas SQLite — cf. note plus bas).
+   SUPERSET_META_DB=superset_meta
+   SUPERSET_META_USER=superset_meta
+   SUPERSET_META_PASSWORD=<mot_de_passe_fort>
    ```
 4. Dans `nginx.prod.conf`, ajuster `server_name analytics.*;` au domaine réel
    (ex. `server_name analytics.sigdep.example.org;`).
 5. Le service `superset` se **construit** depuis `superset/Dockerfile` (image
    officielle + driver PostgreSQL `psycopg2`, absent de l'image de base) :
    ```bash
-   docker compose --env-file .env build superset
-   docker compose --env-file .env up -d superset
+   sudo docker compose --env-file .env build superset
+   sudo docker compose --env-file .env up -d superset
    ```
-6. Au premier démarrage, Superset initialise ses métadonnées, crée son compte
-   admin, **et déclare automatiquement la source de données « SIGDEP »** (rôle
-   lecture seule `superset_ro` → schémas `core` + `analytics`, **jamais**
-   `auth`). SQL Lab et les graphiques sont donc utilisables immédiatement, sans
+6. Au premier démarrage du conteneur Postgres (volume vierge), le script
+   d'init crée le rôle `superset_ro` **et** la base de métadonnées
+   `superset_meta`. Superset y initialise ses tables, crée son compte admin,
+   **et déclare automatiquement la source de données « SIGDEP »** (rôle lecture
+   seule `superset_ro` → schémas `core` + `analytics`, **jamais** `auth` ; les
+   droits SELECT sont accordés par une migration Liquibase, une fois les schémas
+   créés). SQL Lab et les graphiques sont utilisables immédiatement, sans
    ajouter la connexion à la main.
+
+   > **Métadonnées sur PostgreSQL (et non SQLite).** Superset stocke son état
+   > (dashboards, requêtes SQL Lab, comptes) dans `superset_meta`. SQLite, le
+   > défaut, échoue sur les écritures concurrentes en multi-worker (« Impossible
+   > de migrer l'état de l'éditeur de requêtes ») ; PostgreSQL l'évite. Laisser
+   > `SUPERSET_META_PASSWORD` vide retomberait sur SQLite (déconseillé).
 7. Ouvrir `https://analytics.<domaine>/` → login (admin Superset ci-dessus) →
    la base **SIGDEP** est déjà présente dans **SQL Lab** et le créateur de
    graphiques.

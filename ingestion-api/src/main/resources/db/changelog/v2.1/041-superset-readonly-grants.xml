@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      Accorde au rôle lecture seule de Superset (superset_ro, créé au boot
+      Postgres par 01-init-superset-readonly.sh) l'accès SELECT aux schémas
+      core + analytics. NE PAS le faire dans le script d'init Postgres : il
+      s'exécute avant que ces schémas existent (ils sont créés par Liquibase).
+
+      - Idempotent (runAlways) : réapplique les droits à chaque démarrage, ce
+        qui couvre aussi les tables ajoutées par de futures migrations.
+      - Sans effet si le rôle n'existe pas (déploiement sans Superset) : le bloc
+        PL/pgSQL teste sa présence d'abord.
+      - JAMAIS de droit sur le schéma auth (hash de mots de passe, clés API).
+    -->
+    <changeSet id="041-superset-readonly-grants" author="itechciv" runAlways="true">
+        <sql splitStatements="false"><![CDATA[
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superset_ro') THEN
+            GRANT USAGE ON SCHEMA core, analytics TO superset_ro;
+            GRANT SELECT ON ALL TABLES IN SCHEMA core, analytics TO superset_ro;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA core
+              GRANT SELECT ON TABLES TO superset_ro;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA analytics
+              GRANT SELECT ON TABLES TO superset_ro;
+          END IF;
+        END
+        $$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+              IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superset_ro') THEN
+                REVOKE ALL ON ALL TABLES IN SCHEMA core, analytics FROM superset_ro;
+                REVOKE USAGE ON SCHEMA core, analytics FROM superset_ro;
+              END IF;
+            END
+            $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
