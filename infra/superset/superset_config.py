@@ -39,22 +39,29 @@ LANGUAGES = {
 ENABLE_PROXY_FIX = True
 PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 0}
 
-# CSRF désactivée. Les POST de SQL Lab (tabstateview, validate_sql, dataset,
-# log…) échouaient systématiquement en « CSRF token is missing » → 403, parce
-# que le cookie de session Flask (porteur du jeton CSRF) n'est pas renvoyé sur
-# les requêtes AJAX dans ce montage (sous-domaine + proxy), et Superset
-# réimpose SESSION_COOKIE_SAMESITE=Lax APRÈS superset_config.py, empêchant la
-# bascule en SameSite=None qui aurait corrigé l'envoi du cookie.
+# CSRF + session derrière le proxy (Superset sur un sous-domaine analytics).
 #
-# La protection CSRF est donc levée côté Superset — c'est SÛR ici car Superset
-# n'est JAMAIS joignable en direct : tout passe par nginx avec auth_request SSO
-# (cookie sigdep_sso vérifié à chaque requête). Le vecteur CSRF (requête forgée
-# par un site tiers) est déjà bloqué en amont par cette authentification.
-WTF_CSRF_ENABLED = False
-# Le cookie de session reste Secure en HTTPS (true en prod, false en dev HTTP).
+# L'API REST de Superset (/api/v1/*) s'authentifie par la SESSION (cookie) +
+# un jeton CSRF ; SANS CSRF, FAB se rabat sur JWT et renvoie « Missing
+# Authorization Header » → 403 (création de dataset, etc.). La CSRF doit donc
+# rester ACTIVE. Le problème réel était que le cookie de session, en
+# SameSite=Lax, n'était pas renvoyé sur les requêtes AJAX → jeton CSRF absent.
+#
+# Superset réimpose SESSION_COOKIE_SAMESITE=Lax APRÈS ce fichier ; on force donc
+# la valeur dans FLASK_APP_MUTATOR (exécuté en dernier, cf. plus bas).
 _secure_cookies = os.environ.get("SUPERSET_SECURE_COOKIES", "true").lower() == "true"
+WTF_CSRF_ENABLED = True
+WTF_CSRF_SSL_STRICT = False
 SESSION_COOKIE_SECURE = _secure_cookies
 SESSION_COOKIE_HTTPONLY = True
+
+
+def FLASK_APP_MUTATOR(app):  # noqa: N802 (nom imposé par Superset)
+    # Forcer le SameSite du cookie de session APRÈS toute la config Superset.
+    # En HTTPS (prod) : None (+ Secure obligatoire) pour que le cookie suive les
+    # requêtes AJAX cross-contexte ; en dev HTTP : Lax (None+Secure impossible).
+    app.config["SESSION_COOKIE_SAMESITE"] = "None" if _secure_cookies else "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = _secure_cookies
 
 # ===========================================================================
 # SSO « header de confiance » avec la console SIGDEP.
