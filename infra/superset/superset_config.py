@@ -57,11 +57,32 @@ SESSION_COOKIE_HTTPONLY = True
 
 
 def FLASK_APP_MUTATOR(app):  # noqa: N802 (nom imposé par Superset)
-    # Forcer le SameSite du cookie de session APRÈS toute la config Superset.
-    # En HTTPS (prod) : None (+ Secure obligatoire) pour que le cookie suive les
-    # requêtes AJAX cross-contexte ; en dev HTTP : Lax (None+Secure impossible).
+    # 1) Forcer le SameSite du cookie de session APRÈS toute la config Superset.
+    # En HTTPS (prod) : None (+ Secure) pour que le cookie suive les requêtes
+    # AJAX cross-contexte ; en dev HTTP : Lax (None+Secure impossible).
     app.config["SESSION_COOKIE_SAMESITE"] = "None" if _secure_cookies else "Lax"
     app.config["SESSION_COOKIE_SECURE"] = _secure_cookies
+
+    # 2) Connecter l'utilisateur depuis X-Remote-User sur TOUTES les requêtes
+    # (y compris l'API REST /api/v1/*). FAB ne déclenche le login REMOTE_USER
+    # que via sa vue de login : les appels API directs (csrf_token, dataset…)
+    # restaient alors non authentifiés → 401 → « CSRF token is missing » en
+    # cascade. Ce before_request fait le login à chaque requête si besoin.
+    from flask import request, g
+    from flask_login import login_user, current_user
+
+    @app.before_request
+    def _login_remote_user():  # noqa: ANN202
+        if getattr(current_user, "is_authenticated", False):
+            return
+        username = request.headers.get("X-Remote-User")
+        if not username:
+            return
+        sm = app.appbuilder.sm
+        user = sm.auth_user_remote_user(username)
+        if user is not None:
+            login_user(user)
+            g.user = user
 
 # ===========================================================================
 # SSO « header de confiance » avec la console SIGDEP.
