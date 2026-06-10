@@ -5,23 +5,25 @@ Ce guide s'adresse aux **techniciens** qui installent l'agent
 données de l'OpenMRS local et les envoie au hub central toutes les
 15 minutes.
 
-Deux modes d'installation sont supportés ; choisissez selon les
-contraintes du site :
+Trois modes d'installation sont supportés ; choisissez selon le site :
 
-- **Mode A — systemd** (recommandé en production stable). L'agent
-  tourne comme un service Linux natif. Nécessite Java 17 sur le poste.
-- **Mode B — Docker** (recommandé en intégration ou si le site a déjà
-  une stack Docker). Image pré-construite, aucun Java à installer
-  sur l'hôte.
+- **Mode A — installeur Linux autonome** (recommandé sur serveur Linux).
+  Bundle `tar.gz` avec **JRE embarqué** + service systemd, via `install.sh`.
+  Aucun Java ni code source à installer.
+- **Mode B — Docker** (si le site a déjà une stack Docker). Image
+  pré-construite, aucun Java à installer sur l'hôte.
+- **Mode C — installeur Windows autonome** (poste Windows). Archive `zip`
+  avec **JRE embarqué** + service Windows (WinSW).
 
-Les deux modes partagent les pré-requis ci-dessous et la validation
-côté hub à la fin.
+Tous les modes partagent les pré-requis ci-dessous et la validation côté hub à
+la fin.
 
 ## Pré-requis communs
 
 Sur le poste cible (site) :
 
-- **Système** : Linux (Ubuntu 22.04+ ou équivalent).
+- **Système** : Linux (Ubuntu 22.04+ ou équivalent) **ou** Windows
+  10/11/Server 2016+ (64-bit). Le JRE est embarqué dans le bundle.
 - **MySQL** local (= la base OpenMRS du site). L'agent y lit en
   lecture seule.
 - **Accès réseau sortant** vers le hub central (HTTPS, port 443).
@@ -37,7 +39,7 @@ Côté hub (à demander à l'équipe SIGDEP centrale) :
 
 ## Préparer l'utilisateur MySQL en lecture seule
 
-Cette étape est commune aux deux modes — l'agent ne doit jamais
+Cette étape est commune à tous les modes — l'agent ne doit jamais
 écrire dans OpenMRS.
 
 Sur l'OpenMRS local :
@@ -55,79 +57,41 @@ FLUSH PRIVILEGES;
 
 ---
 
-# Mode A — systemd
+# Mode A — Installeur Linux autonome (systemd, JRE embarqué)
 
-## A.1 — Installer Java 17
+Recommandé sur un serveur Linux. Le bundle `sigdep-sync-linux-<version>.tar.gz`
+(attaché à chaque release) embarque le **JRE Temurin 17** : aucun Java à
+installer, aucun code source. (Pour Windows, voir le **Mode C**.)
 
-```bash
-sudo apt install -y openjdk-17-jre-headless
-```
-
-## A.2 — Créer l'utilisateur système
+## A.1 — Installer
 
 ```bash
-sudo useradd -r -s /bin/false sigdep-agent
-sudo mkdir -p /var/lib/sigdep-agent /etc/sigdep-sync /opt/sigdep-sync
-sudo chown -R sigdep-agent:sigdep-agent /var/lib/sigdep-agent
+# Télécharger le bundle de la version voulue
+VERSION=2.1.0
+curl -fsSL -O \
+  "https://github.com/ITECH-CI/sigdep-sync/releases/download/v${VERSION}/sigdep-sync-linux-${VERSION}.tar.gz"
+tar -xzf sigdep-sync-linux-${VERSION}.tar.gz
+cd sigdep-sync-linux-${VERSION}
+
+# Installer (crée l'utilisateur système, /opt/sigdep-sync, le service systemd)
+sudo ./install.sh
 ```
 
-## A.3 — Déployer le binaire
+`install.sh` crée l'utilisateur `sigdep-sync`, copie le jar + le JRE dans
+`/opt/sigdep-sync`, prépare le buffer `/var/lib/sigdep-sync`, et installe l'unité
+systemd. Il est **idempotent** : relancé pour une mise à jour, il remplace le jar
+et le JRE mais **conserve votre `.env`**.
+
+Puis configurer et démarrer :
 
 ```bash
-sudo cp sigdep-sync-<version>.jar /opt/sigdep-sync/sigdep-sync.jar
-sudo chown sigdep-agent:sigdep-agent /opt/sigdep-sync/sigdep-sync.jar
-sudo chmod 750 /opt/sigdep-sync/sigdep-sync.jar
-```
+sudo nano /opt/sigdep-sync/.env
+#   SIGDEP_SITE_CODE        identifiant du site (core.sites du hub)
+#   SIGDEP_LOCAL_DB_*       connexion MySQL OpenMRS (lecture seule, voir plus haut)
+#   SIGDEP_CENTRAL_API_URL  URL du hub (https://…)
+#   SIGDEP_API_KEY          clé générée sur la console (page Sites)
 
-> Le binaire est produit par `mvn -pl sigdep-sync package` ou fourni
-> par l'équipe SIGDEP centrale.
-
-## A.4 — Configurer les variables d'environnement
-
-Créer `/etc/sigdep-sync/sigdep-sync.env` :
-
-```ini
-# Identification du site
-SIGDEP_SITE_CODE=CHU_TREICHVILLE
-
-# Hub central
-SIGDEP_CENTRAL_API_URL=https://sigdep.pnls.ci
-
-# OpenMRS local (lecture seule)
-SIGDEP_LOCAL_DB_URL=jdbc:mysql://localhost:3306/openmrs?readOnly=true&useSSL=false
-SIGDEP_LOCAL_DB_USER=sigdep_reader
-SIGDEP_LOCAL_DB_PASSWORD=...
-
-# Buffer local (laisser le défaut sauf besoin spécifique)
-SIGDEP_BUFFER_PATH=/var/lib/sigdep-agent/buffer.sqlite
-
-# Authentification : clé API du site (en-tête X-API-Key)
-SIGDEP_API_KEY=...
-
-# Paramètres avancés (laisser le défaut)
-SIGDEP_BATCH_SIZE=500
-SIGDEP_SYNC_INTERVAL_MINUTES=15
-SIGDEP_MAX_REJECT_ATTEMPTS=10
-```
-
-Protéger le fichier :
-
-```bash
-sudo chown root:sigdep-agent /etc/sigdep-sync/sigdep-sync.env
-sudo chmod 640 /etc/sigdep-sync/sigdep-sync.env
-```
-
-## A.5 — Installer le service systemd
-
-```bash
-sudo cp sigdep-sync/packaging/systemd/sigdep-sync.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now sigdep-sync
-```
-
-Vérifier le démarrage :
-
-```bash
+sudo systemctl start sigdep-sync
 sudo systemctl status sigdep-sync
 sudo journalctl -u sigdep-sync -f
 ```
@@ -135,10 +99,17 @@ sudo journalctl -u sigdep-sync -f
 Vous devez voir, dans les premières secondes :
 
 ```
+INFO  Agent configured for site '<code>'
 INFO  Sync cycle started. N extractor(s) registered.
-INFO  Enqueued X records (...)
 INFO  Flushed Y batch(es) for ENTITY ...
 ```
+
+**Mise à jour** : extraire la nouvelle archive et relancer `sudo ./install.sh`,
+puis `sudo systemctl restart sigdep-sync`. **Désinstaller** : `sudo ./uninstall.sh`
+(ajouter `--purge` pour supprimer aussi la config et le buffer).
+
+> **Windows** : même principe (bundle autonome, JRE embarqué, service natif) —
+> voir le **Mode C** plus bas, qui détaille l'installation du service Windows.
 
 ---
 
@@ -373,9 +344,9 @@ Pour épingler une nouvelle version : éditer `.env`,
    sigdep-sync-service.exe start
    ```
 
-Dans les trois modes, **l'outbox SQLite et la watermark sont préservées**
-(volume Docker pour le mode B, dossier `/var/lib/sigdep-agent` pour
-le mode A, fichier `buffer.sqlite` à côté du jar pour le mode C) :
+Dans tous les modes, **l'outbox SQLite et la watermark sont préservées**
+(dossier `/var/lib/sigdep-sync` pour le mode A Linux, dossier configuré pour
+Windows, volume Docker pour le mode B) :
 l'agent reprend exactement où il en était.
 
 ## En cas de problème
@@ -388,10 +359,12 @@ sudo journalctl -u sigdep-sync --no-pager | tail -50
 ```
 
 Causes fréquentes :
-- **Java pas installé** : `which java` ; sinon `apt install openjdk-17-jre-headless`.
-- **Fichier env non lisible** par l'utilisateur `sigdep-agent` : vérifier les
-  permissions.
-- **Buffer non accessible** : vérifier `/var/lib/sigdep-agent` et le `chown`.
+- **`.env` incomplet** : variable obligatoire manquante (`SIGDEP_SITE_CODE`,
+  `SIGDEP_LOCAL_DB_*`, `SIGDEP_API_KEY`…). Le bundle embarque le JRE, donc
+  l'erreur n'est jamais « Java absent ».
+- **`.env` non lisible** par l'utilisateur `sigdep-sync` : vérifier les
+  permissions (`install.sh` le met en `640 sigdep-sync:sigdep-sync`).
+- **Buffer non accessible** : vérifier `/var/lib/sigdep-sync` et son propriétaire.
 
 **Mode B** :
 ```bash
