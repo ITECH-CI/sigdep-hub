@@ -193,6 +193,14 @@ docker compose -f docker-compose.site.yml logs -f
 Vous devez voir les mêmes lignes que pour le mode systemd
 (`Sync cycle started`, `Enqueued X records`, `Flushed Y batch(es)`).
 
+> **Architecture** : l'image n'est publiée que pour **linux/amd64**. Le
+> fichier `docker-compose.site.yml` force déjà `platform: linux/amd64`,
+> donc un serveur Linux amd64 (cas de production) l'exécute nativement.
+> Sur un poste arm64 (Mac Apple Silicon, utilisé pour un test), Docker
+> Desktop l'exécute par émulation. Si vous voyez
+> `no matching manifest for linux/arm64/v8`, vérifiez que la ligne
+> `platform: linux/amd64` est bien présente dans le service.
+
 > **Connexion à GHCR si l'image est privée** : si vous voyez
 > `unauthorized: not authorized for ghcr.io/.../sigdep-sync`, l'image
 > est privée et vous devez vous authentifier :
