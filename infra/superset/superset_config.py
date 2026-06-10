@@ -66,9 +66,15 @@ def FLASK_APP_MUTATOR(app):  # noqa: N802 (nom imposé par Superset)
     # 2) Connecter l'utilisateur depuis X-Remote-User sur TOUTES les requêtes
     # (y compris l'API REST /api/v1/*). FAB ne déclenche le login REMOTE_USER
     # que via sa vue de login : les appels API directs (csrf_token, dataset…)
-    # restaient alors non authentifiés → 401 → « CSRF token is missing » en
-    # cascade. Ce before_request fait le login à chaque requête si besoin.
-    from flask import request, g
+    # restaient alors non authentifiés → 401 → « CSRF token is missing ».
+    #
+    # On NE rappelle PAS login_user à chaque requête : cela régénère l'id de
+    # session (anti-fixation Flask-Login) → le jeton CSRF lié à l'ancienne
+    # session devient invalide → 403 sur les POST. On pose seulement g.user
+    # pour la requête courante quand une session est déjà établie ; on ne fait
+    # le vrai login_user (qui crée la session) qu'une seule fois, à la première
+    # requête sans session.
+    from flask import request, g, session as flask_session
     from flask_login import login_user, current_user
 
     @app.before_request
@@ -80,9 +86,13 @@ def FLASK_APP_MUTATOR(app):  # noqa: N802 (nom imposé par Superset)
             return
         sm = app.appbuilder.sm
         user = sm.auth_user_remote_user(username)
-        if user is not None:
+        if user is None:
+            return
+        # login_user UNIQUEMENT si aucune session Flask-Login n'existe encore
+        # (sinon on régénère l'id et on invalide le jeton CSRF du client).
+        if "_user_id" not in flask_session:
             login_user(user)
-            g.user = user
+        g.user = user
 
 # ===========================================================================
 # SSO « header de confiance » avec la console SIGDEP.
