@@ -437,6 +437,37 @@ sudo docker compose --env-file .env up -d
 Liquibase applique automatiquement les nouvelles migrations de schéma au
 démarrage de `ingestion-api` (et `console-api` pour le schéma `auth`).
 
+> **Données vs config.** Une mise à jour ne « réimporte » jamais les données :
+> elles vivent dans les volumes Docker (`postgres_data`, `superset_home`), pas
+> sur GitHub. Le Cas A ne touche que les tags d'images ; le Cas B ne récupère
+> que des **fichiers de conf** depuis la release. Les migrations de schéma se
+> font **en place** au démarrage (Liquibase), jamais par réimport.
+
+#### Nom du dossier et volumes (à savoir avant de renommer)
+
+Compose préfixe les **volumes** avec le **nom de projet**, par défaut égal au
+nom du dossier de déploiement. Renommer ou déplacer le dossier change donc ce
+préfixe : Compose ne « voit » plus les volumes existants et la base semble
+vide (les données ne sont pas perdues — juste orphelines sous l'ancien
+préfixe). Deux conséquences pratiques :
+
+- **Garder le même dossier** pour une simple MAJ de version (Cas A) : rien à
+  faire, le préfixe ne bouge pas.
+- **Pour pouvoir renommer/déplacer librement** : figer le nom de projet dans
+  le `.env` via `COMPOSE_PROJECT_NAME`. Sur une instance **déjà en service**,
+  mettre la valeur au **préfixe actuel** des volumes (et non à un nouveau nom) :
+
+  ```bash
+  docker volume ls | grep postgres_data         # ex. mon-dossier_postgres_data
+  echo 'COMPOSE_PROJECT_NAME=mon-dossier' >> .env  # le préfixe vu ci-dessus
+  # à partir de là le dossier peut être renommé/déplacé sans risque :
+  docker compose --env-file .env down            # JAMAIS -v (détruit les volumes)
+  # mv … ; cd … ; docker compose --env-file .env up -d
+  ```
+
+Les nouveaux déploiements ont `COMPOSE_PROJECT_NAME=sigdep-hub` dans le
+`.env.example` : le projet est d'emblée détaché du nom de dossier.
+
 #### Après la mise à jour — vérifier
 
 ```bash
