@@ -24,7 +24,7 @@ assets 404. `SUPERSET_APP_ROOT` / `APPLICATION_ROOT` **ne suffisent pas**
 **Piège « niveau de sous-domaine » (certificat).**
 - `analytics.<console>` (point) = un niveau de plus → un wildcard `*.<parent>`
   ne le couvre PAS si `<console>` est déjà un sous-domaine
-  (ex. `*.itech-civ.org` **ne couvre pas** `analytics.sigdephub-v3.itech-civ.org`).
+  (ex. `*.itech-civ.org` **ne couvre pas** `analytics.sigdephub.itech-civ.org`).
 - `analytics-<console>` (tiret) = **même niveau** que la console → couvert par
   le wildcard existant `*.<parent>`. **Pratique pour réutiliser un cert en place.**
 

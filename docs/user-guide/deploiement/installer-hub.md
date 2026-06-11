@@ -276,11 +276,11 @@ Le `docker-compose.prod.yml` inclut un service **Superset** servi sur un
    - `analytics.<console>` (avec un **point**) ajoute un niveau de
      sous-domaine. ⚠️ Un wildcard `*.<parent>` **ne le couvre pas** si
      `<console>` est déjà un sous-domaine (ex. `*.itech-civ.org` ne couvre
-     **pas** `analytics.sigdephub-v3.itech-civ.org`). Exige un certificat
+     **pas** `analytics.sigdephub.itech-civ.org`). Exige un certificat
      dédié (Let's Encrypt SAN) ou `*.<console>`.
    - `analytics-<console>` (avec un **tiret**) reste au **même niveau** que la
      console → **couvert par le wildcard existant** `*.<parent>` (ex.
-     `*.itech-civ.org` couvre `analytics-sigdephub-v3.itech-civ.org`).
+     `*.itech-civ.org` couvre `analytics-sigdephub.itech-civ.org`).
      Pratique pour réutiliser un wildcard déjà en place, sans nouveau cert.
    Le `server_name` du vhost Superset (`nginx.prod.conf`) accepte les deux
    formes ; ajustez-le au domaine réel.
@@ -342,7 +342,7 @@ Pré-requis (en plus du sous-domaine et du certificat ci-dessus) :
    convention de nommage choisie ci-dessus :
    - point : `sigdep.<domaine>` + `analytics.sigdep.<domaine>` → parent
      `.sigdep.<domaine>`.
-   - tiret : `sigdephub-v3.<domaine>` + `analytics-sigdephub-v3.<domaine>` →
+   - tiret : `sigdephub.<domaine>` + `analytics-sigdephub.<domaine>` →
      parent `.<domaine>` (ex. `.itech-civ.org`).
 2. Dans `.env` :
    ```ini
