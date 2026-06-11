@@ -5,6 +5,9 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +22,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class RejectedRecordService {
+
+    private static final Logger log = LoggerFactory.getLogger(RejectedRecordService.class);
 
     private final JdbcTemplate jdbc;
 
@@ -196,17 +201,32 @@ public class RejectedRecordService {
             String table = ENTITY_TABLE.get(type); // valeur constante, jamais user-controlled
             // Marque résolus les rejets ouverts de ce site/type dont le
             // source_uuid existe maintenant en base métier pour le même site.
-            int n = jdbc.update(
-                    "UPDATE audit.rejected_record r"
-                  + "   SET resolved_at = NOW(), resolved_by = ?, resolution_note = ?"
-                  + " WHERE r.resolved_at IS NULL"
-                  + "   AND r.site_id = ?"
-                  + "   AND r.entity_type = ?"
-                  + "   AND EXISTS (SELECT 1 FROM " + table + " c"
-                  + "                WHERE c.site_id = r.site_id"
-                  + "                  AND c.source_uuid = r.source_uuid)",
-                    resolvedBy, safeNote, siteId, type);
-            resolved += n;
+            // c.source_uuid est de type UUID en base métier (core.*) tandis que
+            // audit.rejected_record.source_uuid est un VARCHAR (il peut valoir
+            // "unknown" pour un rejet sans uuid). PostgreSQL refuse la
+            // comparaison directe uuid = varchar ("operator does not exist:
+            // uuid = character varying") → on caste le côté métier en texte.
+            // Les rejets à r.source_uuid='unknown' ne matchent alors aucun uuid,
+            // ce qui est correct : on ne peut pas vérifier leur présence.
+            try {
+                int n = jdbc.update(
+                        "UPDATE audit.rejected_record r"
+                      + "   SET resolved_at = NOW(), resolved_by = ?, resolution_note = ?"
+                      + " WHERE r.resolved_at IS NULL"
+                      + "   AND r.site_id = ?"
+                      + "   AND r.entity_type = ?"
+                      + "   AND EXISTS (SELECT 1 FROM " + table + " c"
+                      + "                WHERE c.site_id = r.site_id"
+                      + "                  AND c.source_uuid::text = r.source_uuid)",
+                        resolvedBy, safeNote, siteId, type);
+                resolved += n;
+            } catch (DataAccessException ex) {
+                // Une table fautive (schéma divergent, etc.) ne doit pas faire
+                // échouer toute la résolution en masse. On loggue et on continue
+                // avec les autres types — l'admin verra le compte partiel.
+                log.error("bulk-resolve : échec sur le type {} (table {}) — ignoré : {}",
+                        type, table, ex.getMostSpecificCause().getMessage());
+            }
         }
         return resolved;
     }
