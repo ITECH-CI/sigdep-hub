@@ -1,7 +1,7 @@
 {
   "name": "sigdep-console-web",
   "private": true,
-  "version": "2.1.1-SNAPSHOT",
+  "version": "2.1.2-SNAPSHOT",
   "type": "module",
   "scripts": {
     "dev": "vite",
