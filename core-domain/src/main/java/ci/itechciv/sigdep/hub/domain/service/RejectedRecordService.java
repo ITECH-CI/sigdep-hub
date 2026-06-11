@@ -209,12 +209,19 @@ public class RejectedRecordService {
             // Les rejets à r.source_uuid='unknown' ne matchent alors aucun uuid,
             // ce qui est correct : on ne peut pas vérifier leur présence.
             try {
+                // entity_type est écrit en MINUSCULES par l'ingestion
+                // (SyncController : "treatment_initiations", "patients", …)
+                // alors que `type` ici est en MAJUSCULES (clé du mapping
+                // ENTITY_TABLE). On compare donc insensible à la casse, sinon
+                // 'treatment_initiations' = 'TREATMENT_INITIATIONS' est faux et
+                // rien n'est résolu ({"resolved":0}) alors que des rejets
+                // existent bel et bien.
                 int n = jdbc.update(
                         "UPDATE audit.rejected_record r"
                       + "   SET resolved_at = NOW(), resolved_by = ?, resolution_note = ?"
                       + " WHERE r.resolved_at IS NULL"
                       + "   AND r.site_id = ?"
-                      + "   AND r.entity_type = ?"
+                      + "   AND lower(r.entity_type) = lower(?)"
                       + "   AND EXISTS (SELECT 1 FROM " + table + " c"
                       + "                WHERE c.site_id = r.site_id"
                       + "                  AND c.source_uuid::text = r.source_uuid)",
