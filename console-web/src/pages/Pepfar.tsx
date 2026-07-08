@@ -18,12 +18,24 @@ import { PageHeader } from "../components/PageHeader";
 import { GeoFilter, GeoScope } from "../components/GeoFilter";
 import { KpiRowSkeleton, ListSkeleton } from "../components/Skeleton";
 
-const AGE_BANDS = ["<15", "15-24", "25-49", "50+", "unknown"] as const;
-const SEXES: ReadonlyArray<{ key: "M" | "F"; label: string }> = [
-  { key: "M", label: "Hommes" },
-  { key: "F", label: "Femmes" },
-];
-
+// Tranches d'âge PEPFAR MER (désagrégation fine). L'ordre de ce tableau
+// porte l'ordre d'affichage des colonnes. Doit rester aligné sur le CASE
+// de PepfarService.ageBandExpr() côté backend. 'unknown' en dernier.
+const AGE_BANDS = [
+  "<1",
+  "1-4",
+  "5-9",
+  "10-14",
+  "15-19",
+  "20-24",
+  "25-29",
+  "30-34",
+  "35-39",
+  "40-44",
+  "45-49",
+  "50+",
+  "unknown",
+] as const;
 function currentDefaultQuarter(): { fy: number; q: number } {
   // PEPFAR fiscal year starts Oct 1. Pick the most recently completed quarter.
   const now = new Date();
@@ -255,135 +267,189 @@ export function Pepfar() {
   );
 }
 
+// Lignes affichées = sexes présents (+ 'unknown' seulement s'il porte des
+// données), dans l'ordre M, F, unknown.
+const SEX_ROWS: ReadonlyArray<{ key: "M" | "F" | "unknown"; label: string }> = [
+  { key: "M", label: "Hommes" },
+  { key: "F", label: "Femmes" },
+  { key: "unknown", label: "Non renseigné" },
+];
+
+/** Bandes à afficher en colonnes : on masque 'unknown' s'il est vide. */
+function visibleBands(bandTotals: Record<string, number>): string[] {
+  return AGE_BANDS.filter((b) => b !== "unknown" || (bandTotals[b] ?? 0) > 0);
+}
+
+/** Lignes de sexe à afficher : on masque 'unknown' s'il est vide. */
+function visibleSexRows(sexTotals: Record<string, number>) {
+  return SEX_ROWS.filter((s) => s.key !== "unknown" || (sexTotals[s.key] ?? 0) > 0);
+}
+
 function DisaggTable({ title, data }: { title: string; data: Disaggregated }) {
   const { byBand, sexTotals, bandTotals } = buildMatrix(data);
+  const bands = visibleBands(bandTotals);
+  const rows = visibleSexRows(sexTotals);
   return (
     <div className="card overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-200">
         <h3 className="text-sm font-medium">{title}</h3>
       </div>
-      <table className="w-full text-sm">
-        <thead className="thead-sigdep text-left">
-          <tr>
-            <th className="px-4 py-2 text-left font-medium">Tranche d’âge</th>
-            {SEXES.map((s) => (
-              <th key={s.key} className="px-4 py-2 text-right font-medium">
-                {s.label}
-              </th>
-            ))}
-            <th className="px-4 py-2 text-right font-medium">Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {AGE_BANDS.filter((b) => bandTotals[b] > 0 || b !== "unknown").map(
-            (band) => (
-              <tr key={band} className="hover:bg-slate-50">
-                <td className="px-4 py-2">{band}</td>
-                {SEXES.map((s) => (
-                  <td key={s.key} className="px-4 py-2 text-right tabular-nums">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="thead-sigdep text-left">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">Sexe</th>
+              {bands.map((band) => (
+                <th key={band} className="px-3 py-2 text-right font-medium tabular-nums">
+                  {band}
+                </th>
+              ))}
+              <th className="px-4 py-2 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((s) => (
+              <tr key={s.key} className="hover:bg-slate-50">
+                <td className="px-4 py-2 whitespace-nowrap">{s.label}</td>
+                {bands.map((band) => (
+                  <td key={band} className="px-3 py-2 text-right tabular-nums">
                     {formatInt(byBand[band][s.key] ?? 0)}
                   </td>
                 ))}
                 <td className="px-4 py-2 text-right tabular-nums font-medium">
-                  {formatInt(bandTotals[band] ?? 0)}
+                  {formatInt(sexTotals[s.key] ?? 0)}
                 </td>
               </tr>
-            ),
-          )}
-          <tr className="bg-slate-50 font-medium">
-            <td className="px-4 py-2">Total</td>
-            {SEXES.map((s) => (
-              <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                {formatInt(sexTotals[s.key] ?? 0)}
-              </td>
             ))}
-            <td className="px-4 py-2 text-right tabular-nums">
-              {formatInt(data.total)}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            <tr className="bg-slate-50 font-medium">
+              <td className="px-4 py-2">Total</td>
+              {bands.map((band) => (
+                <td key={band} className="px-3 py-2 text-right tabular-nums">
+                  {formatInt(bandTotals[band] ?? 0)}
+                </td>
+              ))}
+              <td className="px-4 py-2 text-right tabular-nums">
+                {formatInt(data.total)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Cellule ratio « n / d (%) » réutilisée par les tableaux num/dénom. */
+function ratioCell(n: number, d: number, pctClass: string) {
+  return (
+    <>
+      {formatInt(n)} / {formatInt(d)}
+      {d > 0 && (
+        <span className={`${pctClass} text-xs ml-1`}>
+          ({Math.round((n / d) * 1000) / 10}%)
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Tableau numérateur/dénominateur pivoté : lignes = sexe, colonnes = tranche
+ * d'âge. Sert TX_PVLS, HTS_POS, PMTCT_* et TB_PREV. `totalPct` (optionnel)
+ * force le % de la cellule grand-total (déjà calculé côté backend).
+ */
+function RatioTable({
+  title,
+  denom,
+  numer,
+  denomTotal,
+  numerTotal,
+  totalPct,
+}: {
+  title: string;
+  denom: ReturnType<typeof buildMatrix>;
+  numer: ReturnType<typeof buildMatrix>;
+  denomTotal: number;
+  numerTotal: number;
+  totalPct: number | null;
+}) {
+  const bands = visibleBands(denom.bandTotals);
+  const rows = visibleSexRows(denom.sexTotals);
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-200">
+        <h3 className="text-sm font-medium">{title}</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="thead-sigdep text-left">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">Sexe</th>
+              {bands.map((band) => (
+                <th key={band} className="px-3 py-2 text-right font-medium tabular-nums">
+                  {band}
+                </th>
+              ))}
+              <th className="px-4 py-2 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((s) => (
+              <tr key={s.key} className="hover:bg-slate-50">
+                <td className="px-4 py-2 whitespace-nowrap">{s.label}</td>
+                {bands.map((band) => (
+                  <td key={band} className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                    {ratioCell(
+                      numer.byBand[band][s.key] ?? 0,
+                      denom.byBand[band][s.key] ?? 0,
+                      "text-ink-muted",
+                    )}
+                  </td>
+                ))}
+                <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap font-medium">
+                  {ratioCell(
+                    numer.sexTotals[s.key] ?? 0,
+                    denom.sexTotals[s.key] ?? 0,
+                    "text-emerald-700",
+                  )}
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-slate-50 font-medium">
+              <td className="px-4 py-2">Total</td>
+              {bands.map((band) => (
+                <td key={band} className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                  {ratioCell(
+                    numer.bandTotals[band] ?? 0,
+                    denom.bandTotals[band] ?? 0,
+                    "text-emerald-700",
+                  )}
+                </td>
+              ))}
+              <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
+                {formatInt(numerTotal)} / {formatInt(denomTotal)}
+                {totalPct !== null && (
+                  <span className="text-emerald-700 text-xs ml-1">({totalPct}%)</span>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function PvlsTable({ pvls }: { pvls: TxPvls }) {
-  const denom = buildMatrix(pvls.denominator);
-  const numer = buildMatrix(pvls.numerator);
   return (
-    <div className="card overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-200">
-        <h3 className="text-sm font-medium">
-          TX_PVLS — Suppression virale &middot; numérateur / dénominateur (%)
-        </h3>
-      </div>
-      <table className="w-full text-sm">
-        <thead className="thead-sigdep text-left">
-          <tr>
-            <th className="px-4 py-2 text-left font-medium">Tranche d’âge</th>
-            {SEXES.map((s) => (
-              <th key={s.key} className="px-4 py-2 text-right font-medium">
-                {s.label}
-              </th>
-            ))}
-            <th className="px-4 py-2 text-right font-medium">Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {AGE_BANDS.filter(
-            (b) => denom.bandTotals[b] > 0 || b !== "unknown",
-          ).map((band) => (
-            <tr key={band} className="hover:bg-slate-50">
-              <td className="px-4 py-2">{band}</td>
-              {SEXES.map((s) => {
-                const d = denom.byBand[band][s.key] ?? 0;
-                const n = numer.byBand[band][s.key] ?? 0;
-                return (
-                  <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                    {formatInt(n)} / {formatInt(d)}
-                    {d > 0 && (
-                      <span className="text-ink-muted text-xs ml-1">
-                        ({Math.round((n / d) * 100)}%)
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-              <td className="px-4 py-2 text-right tabular-nums">
-                {formatInt(numer.bandTotals[band] ?? 0)} /{" "}
-                {formatInt(denom.bandTotals[band] ?? 0)}
-              </td>
-            </tr>
-          ))}
-          <tr className="bg-slate-50 font-medium">
-            <td className="px-4 py-2">Total</td>
-            {SEXES.map((s) => {
-              const d = denom.sexTotals[s.key] ?? 0;
-              const n = numer.sexTotals[s.key] ?? 0;
-              return (
-                <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                  {formatInt(n)} / {formatInt(d)}
-                  {d > 0 && (
-                    <span className="text-emerald-700 text-xs ml-1">
-                      ({Math.round((n / d) * 1000) / 10}%)
-                    </span>
-                  )}
-                </td>
-              );
-            })}
-            <td className="px-4 py-2 text-right tabular-nums">
-              {formatInt(pvls.numerator.total)} /{" "}
-              {formatInt(pvls.denominator.total)}
-              {pvls.pct !== null && (
-                <span className="text-emerald-700 text-xs ml-1">
-                  ({pvls.pct}%)
-                </span>
-              )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <RatioTable
+      title="TX_PVLS — Suppression virale · numérateur / dénominateur (%)"
+      denom={buildMatrix(pvls.denominator)}
+      numer={buildMatrix(pvls.numerator)}
+      denomTotal={pvls.denominator.total}
+      numerTotal={pvls.numerator.total}
+      totalPct={pvls.pct}
+    />
   );
 }
 
@@ -402,165 +468,32 @@ function PairTable({
   ratioLabel: string;
   pair: Pair;
 }) {
-  const denom = buildMatrix(pair.denominator);
-  const numer = buildMatrix(pair.numerator);
   return (
-    <div className="card overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-200">
-        <h3 className="text-sm font-medium">
-          {title} &middot; {ratioLabel} / total (%)
-        </h3>
-      </div>
-      <table className="w-full text-sm">
-        <thead className="thead-sigdep text-left">
-          <tr>
-            <th className="px-4 py-2 text-left font-medium">Tranche d’âge</th>
-            {SEXES.map((s) => (
-              <th key={s.key} className="px-4 py-2 text-right font-medium">
-                {s.label}
-              </th>
-            ))}
-            <th className="px-4 py-2 text-right font-medium">Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {AGE_BANDS.filter(
-            (b) => denom.bandTotals[b] > 0 || b !== "unknown",
-          ).map((band) => (
-            <tr key={band} className="hover:bg-slate-50">
-              <td className="px-4 py-2">{band}</td>
-              {SEXES.map((s) => {
-                const d = denom.byBand[band][s.key] ?? 0;
-                const n = numer.byBand[band][s.key] ?? 0;
-                return (
-                  <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                    {formatInt(n)} / {formatInt(d)}
-                    {d > 0 && (
-                      <span className="text-ink-muted text-xs ml-1">
-                        ({Math.round((n / d) * 100)}%)
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-              <td className="px-4 py-2 text-right tabular-nums">
-                {formatInt(numer.bandTotals[band] ?? 0)} /{" "}
-                {formatInt(denom.bandTotals[band] ?? 0)}
-              </td>
-            </tr>
-          ))}
-          <tr className="bg-slate-50 font-medium">
-            <td className="px-4 py-2">Total</td>
-            {SEXES.map((s) => {
-              const d = denom.sexTotals[s.key] ?? 0;
-              const n = numer.sexTotals[s.key] ?? 0;
-              return (
-                <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                  {formatInt(n)} / {formatInt(d)}
-                  {d > 0 && (
-                    <span className="text-emerald-700 text-xs ml-1">
-                      ({Math.round((n / d) * 1000) / 10}%)
-                    </span>
-                  )}
-                </td>
-              );
-            })}
-            <td className="px-4 py-2 text-right tabular-nums">
-              {formatInt(pair.numerator.total)} /{" "}
-              {formatInt(pair.denominator.total)}
-              {pair.pct !== null && (
-                <span className="text-emerald-700 text-xs ml-1">
-                  ({pair.pct}%)
-                </span>
-              )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <RatioTable
+      title={`${title} · ${ratioLabel} / total (%)`}
+      denom={buildMatrix(pair.denominator)}
+      numer={buildMatrix(pair.numerator)}
+      denomTotal={pair.denominator.total}
+      numerTotal={pair.numerator.total}
+      totalPct={pair.pct}
+    />
   );
 }
 
 /**
- * HTS — two side-by-side disaggregated counts: HTS_TST (total tested)
- * and HTS_POS (positives), with positivity rate at the row/column level.
+ * HTS — HTS_TST (dépistés) au dénominateur, HTS_POS (positifs) au
+ * numérateur, taux de positivité par cellule. Réutilise RatioTable.
  */
 function HtsTable({ hts }: { hts: Hts }) {
-  const tst = buildMatrix(hts.tst);
-  const pos = buildMatrix(hts.pos);
   return (
-    <div className="card overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-200">
-        <h3 className="text-sm font-medium">
-          HTS_TST / HTS_POS — Dépistage VIH &middot; positifs / dépistés (%)
-        </h3>
-      </div>
-      <table className="w-full text-sm">
-        <thead className="thead-sigdep text-left">
-          <tr>
-            <th className="px-4 py-2 text-left font-medium">Tranche d’âge</th>
-            {SEXES.map((s) => (
-              <th key={s.key} className="px-4 py-2 text-right font-medium">
-                {s.label}
-              </th>
-            ))}
-            <th className="px-4 py-2 text-right font-medium">Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {AGE_BANDS.filter(
-            (b) => tst.bandTotals[b] > 0 || b !== "unknown",
-          ).map((band) => (
-            <tr key={band} className="hover:bg-slate-50">
-              <td className="px-4 py-2">{band}</td>
-              {SEXES.map((s) => {
-                const t = tst.byBand[band][s.key] ?? 0;
-                const p = pos.byBand[band][s.key] ?? 0;
-                return (
-                  <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                    {formatInt(p)} / {formatInt(t)}
-                    {t > 0 && (
-                      <span className="text-rose-700 text-xs ml-1">
-                        ({Math.round((p / t) * 100)}%)
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-              <td className="px-4 py-2 text-right tabular-nums">
-                {formatInt(pos.bandTotals[band] ?? 0)} /{" "}
-                {formatInt(tst.bandTotals[band] ?? 0)}
-              </td>
-            </tr>
-          ))}
-          <tr className="bg-slate-50 font-medium">
-            <td className="px-4 py-2">Total</td>
-            {SEXES.map((s) => {
-              const t = tst.sexTotals[s.key] ?? 0;
-              const p = pos.sexTotals[s.key] ?? 0;
-              return (
-                <td key={s.key} className="px-4 py-2 text-right tabular-nums">
-                  {formatInt(p)} / {formatInt(t)}
-                  {t > 0 && (
-                    <span className="text-rose-700 text-xs ml-1">
-                      ({Math.round((p / t) * 1000) / 10}%)
-                    </span>
-                  )}
-                </td>
-              );
-            })}
-            <td className="px-4 py-2 text-right tabular-nums">
-              {formatInt(hts.pos.total)} / {formatInt(hts.tst.total)}
-              {hts.positivityPct !== null && (
-                <span className="text-rose-700 text-xs ml-1">
-                  ({hts.positivityPct}%)
-                </span>
-              )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <RatioTable
+      title="HTS_TST / HTS_POS — Dépistage VIH · positifs / dépistés (%)"
+      denom={buildMatrix(hts.tst)}
+      numer={buildMatrix(hts.pos)}
+      denomTotal={hts.tst.total}
+      numerTotal={hts.pos.total}
+      totalPct={hts.positivityPct}
+    />
   );
 }
 

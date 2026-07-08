@@ -389,12 +389,12 @@ public class PepfarService {
         String region = anonGeoJoin("c", regionId, districtId, siteId);
 
         // Infants born in the quarter, grouped by sex. Age band is forced
-        // to '<15' since every infant lands there anyway — keeps the
+        // to '<1' since every infant lands there anyway — keeps the
         // disaggregation table layout consistent with the rest of the
-        // cascade. Numerator = subset with a PCR1 sample collected
-        // within 60 days of birth (early infant diagnosis).
+        // cascade (MER fine bands). Numerator = subset with a PCR1 sample
+        // collected within 60 days of birth (early infant diagnosis).
         String sql = "SELECT c.gender AS sex,"
-                + "        '<15' AS band,"
+                + "        '<1' AS band,"
                 + "        count(*) AS denom,"
                 + "        count(*) FILTER (WHERE c.pcr1_sampling_date IS NOT NULL"
                 + "                          AND c.pcr1_sampling_date - c.birth_date <= 60) AS numer"
@@ -541,12 +541,27 @@ public class PepfarService {
         return "DATE_PART('year', AGE(DATE '" + asOf + "', p.birth_date))";
     }
 
+    /**
+     * Tranches d'âge PEPFAR MER (désagrégation fine standard) :
+     * &lt;1, 1-4, 5-9, 10-14, 15-19, 20-24, 25-29, 30-34, 35-39, 40-44,
+     * 45-49, 50+. Un âge non renseigné (birth_date null / age saisi null)
+     * retombe dans 'unknown'. L'ordre d'affichage est porté par le front
+     * (constante AGE_BANDS), pas par ce CASE.
+     */
     private static String ageBandExpr(String yearsExpr) {
         return "CASE"
                 + "  WHEN " + yearsExpr + " IS NULL THEN 'unknown'"
-                + "  WHEN " + yearsExpr + " < 15 THEN '<15'"
-                + "  WHEN " + yearsExpr + " < 25 THEN '15-24'"
-                + "  WHEN " + yearsExpr + " < 50 THEN '25-49'"
+                + "  WHEN " + yearsExpr + " < 1  THEN '<1'"
+                + "  WHEN " + yearsExpr + " < 5  THEN '1-4'"
+                + "  WHEN " + yearsExpr + " < 10 THEN '5-9'"
+                + "  WHEN " + yearsExpr + " < 15 THEN '10-14'"
+                + "  WHEN " + yearsExpr + " < 20 THEN '15-19'"
+                + "  WHEN " + yearsExpr + " < 25 THEN '20-24'"
+                + "  WHEN " + yearsExpr + " < 30 THEN '25-29'"
+                + "  WHEN " + yearsExpr + " < 35 THEN '30-34'"
+                + "  WHEN " + yearsExpr + " < 40 THEN '35-39'"
+                + "  WHEN " + yearsExpr + " < 45 THEN '40-44'"
+                + "  WHEN " + yearsExpr + " < 50 THEN '45-49'"
                 + "  ELSE '50+'"
                 + " END";
     }
