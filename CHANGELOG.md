@@ -3,6 +3,29 @@
 Le format suit [Keep a Changelog](https://keepachangelog.com/) et la
 plateforme adhère à [Semantic Versioning](https://semver.org/).
 
+> Note : les entrées 2.1.0 → 2.1.2 n'ont pas été reportées dans ce
+> fichier au fil de l'eau ; voir les tags Git et l'historique des commits
+> pour le détail. La 2.1.3 reprend le suivi ci-dessous.
+
+## [2.1.3] — non publié
+
+### Corrigé
+
+- **Résolution en masse des rejets (bulk-resolve)** : la comparaison de
+  `entity_type` est désormais insensible à la casse. L'ingestion écrit le
+  type en minuscules (`treatment_initiations`…) alors que `bulkResolveLanded`
+  le passait en majuscules avant le `WHERE`, d'où un `{"resolved":0}` malgré
+  des rejets bien présents. Corrige notamment le blocage des ~488 k rejets
+  `treatment_initiations`. (`661a2ca`)
+
+### Déploiement
+
+- **`COMPOSE_PROJECT_NAME`** ajouté au `.env.example` : fige le préfixe des
+  volumes Docker (`postgres_data`, `superset_home`) sur le nom de projet
+  plutôt que sur le nom du dossier de déploiement — renommer/déplacer le
+  dossier n'orpheline plus les volumes. (`bb9227a`)
+- Domaine d'exemple aligné sur `sigdephub` (sans suffixe `-v3`). (`2d06f53`)
+
 ## [2.0.0] — non publié
 
 ### Changé — migration de l'authentification : Keycloak → Spring Security + JWT
