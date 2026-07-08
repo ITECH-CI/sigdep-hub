@@ -23,6 +23,35 @@ _metadata_uri = os.environ.get("SUPERSET_METADATA_DB_URI")
 if _metadata_uri:
     SQLALCHEMY_DATABASE_URI = _metadata_uri
 
+# Caches partagés entre workers. Sans backend PARTAGÉ + PERSISTANT, SQL Lab et
+# l'explorateur n'arrivent pas à persister leur état → notification « Impossible
+# de migrer l'état de l'éditeur de requêtes » en boucle (le défaut SimpleCache
+# est propre à chaque worker gunicorn, donc 4 caches désynchronisés).
+# On utilise FileSystemCache dans superset_home (volume déjà monté et partagé
+# entre workers) : pas de service Redis à ajouter, suffisant pour un usage
+# interne à faible concurrence. Passer à RedisCache si la charge le justifie.
+_cache_dir = os.environ.get("SUPERSET_HOME", "/app/superset_home")
+CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": os.path.join(_cache_dir, "cache"),
+    "CACHE_DEFAULT_TIMEOUT": 86400,
+}
+DATA_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": os.path.join(_cache_dir, "data_cache"),
+    "CACHE_DEFAULT_TIMEOUT": 86400,
+}
+FILTER_STATE_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": os.path.join(_cache_dir, "filter_state_cache"),
+    "CACHE_DEFAULT_TIMEOUT": 604800,
+}
+EXPLORE_FORM_DATA_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": os.path.join(_cache_dir, "explore_form_data_cache"),
+    "CACHE_DEFAULT_TIMEOUT": 604800,
+}
+
 # Interface en français par défaut (Superset est traduit via Flask-Babel).
 # L'utilisateur peut toujours basculer la langue depuis son menu profil.
 BABEL_DEFAULT_LOCALE = "fr"
