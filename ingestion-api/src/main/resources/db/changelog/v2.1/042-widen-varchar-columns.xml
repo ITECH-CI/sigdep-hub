@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+      Élargit des colonnes VARCHAR trop courtes révélées par la montée en
+      charge d'un 2e site.
+
+      - treatment_initiations.hiv_type : VARCHAR(20) → (100). Rejet avéré
+        « value too long » : la source écrit « Type de VIH non precisé »
+        (23 car.). Ce champ est alimenté par ObsPivot.asString sur un concept
+        OpenMRS CODÉ → le libellé est le concept_name du dictionnaire, de
+        longueur ARBITRAIRE (non borné par un switch). D'où une marge large.
+
+      - screenings.gender : VARCHAR(2) → (10). Valeur brute de la source (pas
+        un decode borné) ; VARCHAR(2) est trop serré si la source émet autre
+        chose que 'M'/'F'. Durcissement préventif, coût nul.
+
+      - patients.marital_status / education_level / religion : VARCHAR(50) →
+        (100). Mêmes symptômes que hiv_type — ces champs sont propagés depuis
+        la fiche initiale (InitiationWriter.propagateProfile) et alimentés par
+        ObsPivot.asString sur des concepts OpenMRS CODÉS (Etat civil / Niveau
+        d'éducation / Religion) → libellés de longueur ARBITRAIRE. Rejet avéré
+        « value too long for type character varying(50) » sur le 2e site. Les
+        trois sont élargies ensemble (même origine non bornée).
+
+      Élargir un VARCHAR ne réécrit pas les données et ne pose qu'un verrou
+      bref (changement de métadonnée). Idempotent : sur une base déjà patchée
+      à la main en prod, le ré-appliquer est un no-op.
+    -->
+
+    <changeSet id="042-widen-initiations-hiv-type" author="pkomena">
+        <modifyDataType tableName="treatment_initiations" schemaName="core"
+                        columnName="hiv_type" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-screenings-gender" author="pkomena">
+        <modifyDataType tableName="screenings" schemaName="core"
+                        columnName="gender" newDataType="VARCHAR(10)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-patients-marital-status" author="pkomena">
+        <modifyDataType tableName="patients" schemaName="core"
+                        columnName="marital_status" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-patients-education-level" author="pkomena">
+        <modifyDataType tableName="patients" schemaName="core"
+                        columnName="education_level" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-patients-religion" author="pkomena">
+        <modifyDataType tableName="patients" schemaName="core"
+                        columnName="religion" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <!--
+      Élargissement PRÉVENTIF des dernières colonnes suivant le même motif :
+      alimentées par ObsPivot.asString (concept codé OU texte libre = longueur
+      non bornée) et encore en VARCHAR(50). Pas de rejet avéré à ce jour, mais
+      même mécanisme que hiv_type. Après ce lot, plus aucune colonne
+      ObsPivot-alimentée n'est sous VARCHAR(100). Toutes → VARCHAR(100).
+    -->
+
+    <changeSet id="042-widen-tpt-order-number" author="pkomena">
+        <modifyDataType tableName="tpt_records" schemaName="core"
+                        columnName="tpt_order_number" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-tpt-records-regimen" author="pkomena">
+        <modifyDataType tableName="tpt_records" schemaName="core"
+                        columnName="tpt_regimen" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-visits-tpt-regimen" author="pkomena">
+        <modifyDataType tableName="visits" schemaName="core"
+                        columnName="tpt_regimen" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-pediatric-screening-code" author="pkomena">
+        <modifyDataType tableName="treatment_initiations_pediatric" schemaName="core"
+                        columnName="screening_code" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+    <changeSet id="042-widen-lab-results-unit" author="pkomena">
+        <modifyDataType tableName="lab_results" schemaName="core"
+                        columnName="unit" newDataType="VARCHAR(100)"/>
+    </changeSet>
+
+</databaseChangeLog>
