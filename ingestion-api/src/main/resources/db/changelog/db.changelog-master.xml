@@ -53,4 +53,7 @@
     <!-- v2.1 — droits lecture seule Superset (après création des schémas) -->
     <include file="db/changelog/v2.1/041-superset-readonly-grants.xml"/>
 
+    <!-- v2.1 — élargissement de colonnes VARCHAR trop courtes (2e site) -->
+    <include file="db/changelog/v2.1/042-widen-varchar-columns.xml"/>
+
 </databaseChangeLog>

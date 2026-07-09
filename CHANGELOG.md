@@ -7,6 +7,21 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.5] — non publié
+
+### Corrigé
+
+- **Colonnes VARCHAR non bornées (migration 042)** : rejets `value too long`
+  lors de l'ingestion d'un 2e site, sur des colonnes alimentées par
+  `ObsPivot.asString` (nom de concept OpenMRS codé ou texte libre — longueur
+  arbitraire). Élargissements :
+  `treatment_initiations.hiv_type` (20→100),
+  `patients.marital_status` / `education_level` / `religion` (50→100),
+  `tpt_records.tpt_order_number` / `tpt_regimen`, `visits.tpt_regimen`,
+  `treatment_initiations_pediatric.screening_code`, `lab_results.unit`
+  (50→100), et `screenings.gender` (2→10, durcissement). Migration
+  idempotente (`modifyDataType`).
+
 ## [2.1.4] — non publié
 
 ### Ajouté
