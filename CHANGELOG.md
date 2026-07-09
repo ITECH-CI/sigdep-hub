@@ -7,6 +7,25 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.4] — non publié
+
+### Ajouté
+
+- **Indicateurs PEPFAR — désagrégation d'âge MER fine** : passage de 4
+  tranches grossières (`<15/15-24/25-49/50+`) aux 12 tranches MER standard
+  (`<1, 1-4, 5-9, 10-14, 15-19, 20-24, 25-29, 30-34, 35-39, 40-44, 45-49,
+  50+`). Tableaux réagencés : tranches d'âge en **colonnes**, sexe en
+  **lignes** (disposition MER classique). Couvre TX_NEW, TX_CURR, TX_PVLS,
+  HTS, PMTCT, TB_PREV. (`764967a`)
+
+### Corrigé
+
+- **Superset — état de l'éditeur SQL Lab** : ajout de caches partagés
+  (`FileSystemCache` dans `superset_home`) pour `CACHE_CONFIG`,
+  `DATA_CACHE_CONFIG`, `FILTER_STATE_CACHE_CONFIG` et
+  `EXPLORE_FORM_DATA_CACHE`. Sans backend de cache partagé entre workers,
+  la persistance d'état de SQL Lab échouait. (`c3eacc7`)
+
 ## [2.1.3] — non publié
 
 ### Corrigé
