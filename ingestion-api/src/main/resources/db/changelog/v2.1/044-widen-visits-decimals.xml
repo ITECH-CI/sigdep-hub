@@ -30,4 +30,25 @@
                         columnName="height_cm" newDataType="DECIMAL(6,2)"/>
     </changeSet>
 
+    <!--
+      Deuxième vague : colonnes DECIMAL(4,1) (max 999.9) qui débordent aussi
+      sur ce site (« numeric field overflow — precision 4, scale 1 »). On
+      élargit temperature_c, bmi et mid_upper_arm_circumference à DECIMAL(6,1)
+      (max 99999.9). Même logique non destructive.
+    -->
+    <changeSet id="044-widen-visits-temperature" author="pkomena">
+        <modifyDataType tableName="visits" schemaName="core"
+                        columnName="temperature_c" newDataType="DECIMAL(6,1)"/>
+    </changeSet>
+
+    <changeSet id="044-widen-visits-bmi" author="pkomena">
+        <modifyDataType tableName="visits" schemaName="core"
+                        columnName="bmi" newDataType="DECIMAL(6,1)"/>
+    </changeSet>
+
+    <changeSet id="044-widen-visits-muac" author="pkomena">
+        <modifyDataType tableName="visits" schemaName="core"
+                        columnName="mid_upper_arm_circumference" newDataType="DECIMAL(6,1)"/>
+    </changeSet>
+
 </databaseChangeLog>
