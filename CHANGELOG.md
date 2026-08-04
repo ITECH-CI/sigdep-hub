@@ -7,6 +7,17 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.6] — non publié
+
+### Corrigé
+
+- **Backfill de visites historiques rejeté (migration 043)** : `core.visits`
+  est partitionnée par `visit_date` ; les partitions ne couvraient que
+  2010→2030. Un site avec des visites dès 2001 était rejeté en masse
+  (`UPSERT_FAILED` — « no partition of relation "visits" found for row »).
+  Ajout des partitions annuelles **2000→2009** (range 2000→2030 continu).
+  Idempotent (`CREATE TABLE IF NOT EXISTS`).
+
 ## [2.1.5] — non publié
 
 ### Corrigé
