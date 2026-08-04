@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+      core.visits.weight_kg et height_cm étaient en DECIMAL(5,2) (max 999.99).
+      Un 2e site a des valeurs >= 1000 (probable saisie de la taille en mm, ou
+      valeur aberrante) → rejet UPSERT_FAILED au backfill :
+        « ERROR: numeric field overflow — A field with precision 5, scale 2
+          must round to an absolute value less than 10^3. »
+
+      Élargissement à DECIMAL(6,2) (max 9999.99), même approche que la
+      migration 042. NON destructif (modifyDataType), idempotent (no-op si le
+      patch SQL a déjà été appliqué à la main en prod).
+
+      NB : une valeur aberrante (p. ex. taille en mm) sera stockée telle quelle
+      et devra être normalisée côté analyse ; ce changeset ne fait que
+      débloquer l'ingestion.
+    -->
+
+    <changeSet id="044-widen-visits-weight-kg" author="pkomena">
+        <modifyDataType tableName="visits" schemaName="core"
+                        columnName="weight_kg" newDataType="DECIMAL(6,2)"/>
+    </changeSet>
+
+    <changeSet id="044-widen-visits-height-cm" author="pkomena">
+        <modifyDataType tableName="visits" schemaName="core"
+                        columnName="height_cm" newDataType="DECIMAL(6,2)"/>
+    </changeSet>
+
+</databaseChangeLog>

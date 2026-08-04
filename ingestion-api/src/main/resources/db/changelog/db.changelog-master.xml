@@ -59,4 +59,7 @@
     <!-- v2.1 — partitions core.visits 2000→2009 (site à visites historiques) -->
     <include file="db/changelog/v2.1/043-add-visits-partitions-2000s.xml"/>
 
+    <!-- v2.1 — élargissement visits.weight_kg/height_cm DECIMAL(5,2)→(6,2) -->
+    <include file="db/changelog/v2.1/044-widen-visits-decimals.xml"/>
+
 </databaseChangeLog>
