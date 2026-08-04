@@ -5,50 +5,45 @@
                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
 
     <!--
-      core.visits.weight_kg et height_cm étaient en DECIMAL(5,2) (max 999.99).
-      Un 2e site a des valeurs >= 1000 (probable saisie de la taille en mm, ou
-      valeur aberrante) → rejet UPSERT_FAILED au backfill :
-        « ERROR: numeric field overflow — A field with precision 5, scale 2
-          must round to an absolute value less than 10^3. »
+      Colonnes de mesure DECIMAL de core.visits élargies MASSIVEMENT pour ne
+      plus jamais rejeter une valeur, même aberrante.
 
-      Élargissement à DECIMAL(6,2) (max 9999.99), même approche que la
-      migration 042. NON destructif (modifyDataType), idempotent (no-op si le
-      patch SQL a déjà été appliqué à la main en prod).
+      Un 2e site a des valeurs hors normes physiologiques (taille manifestement
+      saisie en mm, poids à 5 chiffres…) qui débordaient successivement
+      DECIMAL(5,2) puis DECIMAL(6,2) puis DECIMAL(4,1) :
+        « ERROR: numeric field overflow ».
 
-      NB : une valeur aberrante (p. ex. taille en mm) sera stockée telle quelle
-      et devra être normalisée côté analyse ; ce changeset ne fait que
-      débloquer l'ingestion.
+      Plutôt que d'élargir au coup par coup, on porte toutes ces colonnes à une
+      précision très large (10 chiffres) — aucune valeur ne peut plus déborder.
+      Les aberrations sont stockées telles quelles et devront être normalisées
+      côté analyse ; ce changeset ne fait que débloquer l'ingestion.
+
+      Idempotent (modifyDataType), non destructif. Même approche que la 042.
     -->
 
     <changeSet id="044-widen-visits-weight-kg" author="pkomena">
         <modifyDataType tableName="visits" schemaName="core"
-                        columnName="weight_kg" newDataType="DECIMAL(6,2)"/>
+                        columnName="weight_kg" newDataType="DECIMAL(10,2)"/>
     </changeSet>
 
     <changeSet id="044-widen-visits-height-cm" author="pkomena">
         <modifyDataType tableName="visits" schemaName="core"
-                        columnName="height_cm" newDataType="DECIMAL(6,2)"/>
+                        columnName="height_cm" newDataType="DECIMAL(10,2)"/>
     </changeSet>
 
-    <!--
-      Deuxième vague : colonnes DECIMAL(4,1) (max 999.9) qui débordent aussi
-      sur ce site (« numeric field overflow — precision 4, scale 1 »). On
-      élargit temperature_c, bmi et mid_upper_arm_circumference à DECIMAL(6,1)
-      (max 99999.9). Même logique non destructive.
-    -->
     <changeSet id="044-widen-visits-temperature" author="pkomena">
         <modifyDataType tableName="visits" schemaName="core"
-                        columnName="temperature_c" newDataType="DECIMAL(6,1)"/>
+                        columnName="temperature_c" newDataType="DECIMAL(10,1)"/>
     </changeSet>
 
     <changeSet id="044-widen-visits-bmi" author="pkomena">
         <modifyDataType tableName="visits" schemaName="core"
-                        columnName="bmi" newDataType="DECIMAL(6,1)"/>
+                        columnName="bmi" newDataType="DECIMAL(10,1)"/>
     </changeSet>
 
     <changeSet id="044-widen-visits-muac" author="pkomena">
         <modifyDataType tableName="visits" schemaName="core"
-                        columnName="mid_upper_arm_circumference" newDataType="DECIMAL(6,1)"/>
+                        columnName="mid_upper_arm_circumference" newDataType="DECIMAL(10,1)"/>
     </changeSet>
 
 </databaseChangeLog>
