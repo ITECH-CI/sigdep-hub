@@ -7,6 +7,20 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.7] — 2026-08-07
+
+### Corrigé
+
+- **nginx : coupures de transport pendant le backfill sync** (cause racine de
+  SYNC-12 côté serveur). `keepalive_requests` relevé de 1000 (défaut) à 100000 :
+  lors d'un backfill, l'agent enchaîne des milliers de POST sur une même
+  connexion HTTP/2 et, au 1000ᵉ, nginx envoyait un `GOAWAY` — vu par OkHttp
+  comme `stream was reset: CANCEL` sur `LAB_RESULTS`. Depuis nginx 1.19.7, cette
+  directive couvre aussi HTTP/2. `proxy_read_timeout`/`proxy_send_timeout` portés
+  à 300 s sur `/api/v1/sync/` (un lot lourd peut mettre plusieurs dizaines de
+  secondes à être persisté). Config de reverse-proxy : à appliquer par
+  `nginx -s reload`, sans rebuild d'image.
+
 ## [2.1.6] — non publié
 
 ### Corrigé
