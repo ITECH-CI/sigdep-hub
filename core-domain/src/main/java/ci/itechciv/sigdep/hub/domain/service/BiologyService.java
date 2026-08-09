@@ -71,16 +71,17 @@ public class BiologyService {
         this.jdbc = jdbc;
     }
 
-    public BiologySummary summary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public BiologySummary summary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         // 1. Cards
         Long examsPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.lab_results lr" + region
-                        + " WHERE lr.voided = FALSE AND lr.exam_date >= ?",
+                        + " WHERE lr.voided = FALSE AND lr.exam_date >= ? AND lr.exam_date <= ?",
                 Long.class,
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         Long examsAllTime = jdbc.queryForObject(
                 "SELECT count(*) FROM core.lab_results lr" + region
@@ -104,12 +105,13 @@ public class BiologyService {
                         + "       count(*) AS total"
                         + " FROM core.lab_results lr" + region
                         + " WHERE lr.voided = FALSE AND lr.test_uuid = ?"
-                        + "   AND lr.value_numeric IS NOT NULL AND lr.exam_date >= ?",
+                        + "   AND lr.value_numeric IS NOT NULL"
+                        + "   AND lr.exam_date >= ? AND lr.exam_date <= ?",
                 BiologyService::ratioPct,
-                geoArgs(regionId, districtId, siteId, SUPPRESSED, VL_UUID, since));
+                geoArgs(regionId, districtId, siteId, SUPPRESSED, VL_UUID, since, until));
 
-        // 3. Monthly viral-suppression series (last <months> months ending today)
-        List<MonthlySuppression> series = monthlySuppression(months, regionId, districtId, siteId);
+        // 3. Monthly viral-suppression series (months couvrant la période)
+        List<MonthlySuppression> series = monthlySuppression(period, regionId, districtId, siteId);
 
         // 4. CD4 distribution (period)
         Cd4Distribution cd4 = jdbc.query(
@@ -123,7 +125,7 @@ public class BiologyService {
                         + " WHERE lr.voided = FALSE"
                         + "   AND lr.test_name ILIKE ?"
                         + "   AND lr.value_numeric IS NOT NULL"
-                        + "   AND lr.exam_date >= ?",
+                        + "   AND lr.exam_date >= ? AND lr.exam_date <= ?",
                 rs -> {
                     if (!rs.next()) return new Cd4Distribution(0, 0, 0, 0, 0);
                     return new Cd4Distribution(
@@ -131,15 +133,15 @@ public class BiologyService {
                             rs.getLong("b3"), rs.getLong("b4"),
                             rs.getLong("total"));
                 },
-                geoArgs(regionId, districtId, siteId, CD4_NAME_LIKE, since));
+                geoArgs(regionId, districtId, siteId, CD4_NAME_LIKE, since, until));
 
         // 5. Top tests (period)
         List<TopTest> topTests = jdbc.query(
                 "SELECT lr.test_name, count(*) AS n FROM core.lab_results lr" + region
-                        + " WHERE lr.voided = FALSE AND lr.exam_date >= ?"
+                        + " WHERE lr.voided = FALSE AND lr.exam_date >= ? AND lr.exam_date <= ?"
                         + " GROUP BY lr.test_name ORDER BY n DESC LIMIT 10",
                 (rs, i) -> new TopTest(rs.getString("test_name"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new BiologySummary(
                 examsPeriod == null ? 0L : examsPeriod,
@@ -149,19 +151,21 @@ public class BiologyService {
                 series,
                 cd4,
                 topTests,
-                months);
+                since,
+                until);
     }
 
-    private List<MonthlySuppression> monthlySuppression(int months, Long regionId, Long districtId, Long siteId) {
+    private List<MonthlySuppression> monthlySuppression(PeriodRange period, Long regionId, Long districtId, Long siteId) {
         String region = geoFilter(regionId, districtId, siteId);
         Long g = geoArg(regionId, districtId, siteId);
         // Two correlated subqueries (total / suppressed) per month bucket.
         // Aliases are deliberately reused inside each subquery — the outer
         // generate_series is in its own scope.
+        // L'axe des mois couvre du mois de `from` au mois de `to` (inclus).
         String sql = "WITH months AS ("
                 + "  SELECT generate_series("
-                + "    date_trunc('month', NOW()) - make_interval(months => ? - 1),"
-                + "    date_trunc('month', NOW()),"
+                + "    date_trunc('month', ?::date),"
+                + "    date_trunc('month', ?::date),"
                 + "    INTERVAL '1 month'"
                 + "  )::date AS month_start"
                 + ")"
@@ -181,7 +185,8 @@ public class BiologyService {
                 + " ORDER BY m.month_start";
 
         List<Object> args = new ArrayList<>();
-        args.add(months);
+        args.add(period.from());
+        args.add(period.to());
         if (g != null) args.add(g);
         args.add(VL_UUID);
         if (g != null) args.add(g);
@@ -228,24 +233,25 @@ public class BiologyService {
             "site",    "s.code"
     );
 
-    public ExamPage exams(String test, int months, Long regionId, Long districtId, Long siteId,
+    public ExamPage exams(String test, PeriodRange period, Long regionId, Long districtId, Long siteId,
                           String sort, String dir,
                           int page, int size) {
         if ("cd4".equals(test)) {
-            return cd4Exams(months, regionId, districtId, siteId, sort, dir, page, size);
+            return cd4Exams(period, regionId, districtId, siteId, sort, dir, page, size);
         }
 
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
         String region = geoFilter(regionId, districtId, siteId);
         Long g = geoArg(regionId, districtId, siteId);
 
-        StringBuilder where = new StringBuilder(" WHERE lr.voided = FALSE AND lr.exam_date >= ?");
+        StringBuilder where = new StringBuilder(
+                " WHERE lr.voided = FALSE AND lr.exam_date >= ? AND lr.exam_date <= ?");
         List<Object> args = new ArrayList<>();
         if (g != null) args.add(g);
-        args.add(since);
+        args.add(period.from());
+        args.add(period.to());
 
         if ("vl".equals(test)) {
             where.append(" AND lr.test_uuid = ?");
@@ -285,13 +291,14 @@ public class BiologyService {
      * absolute count ("Numération des lymphocytes CD4") and the percentage
      * ("CD4%") are surfaced as separate columns; either can be NULL.
      */
-    private ExamPage cd4Exams(int months, Long regionId, Long districtId, Long siteId,
+    private ExamPage cd4Exams(PeriodRange period, Long regionId, Long districtId, Long siteId,
                               String sort, String dir,
                               int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         // Aggregate two rows (abs + pct) into one. There can also be a
@@ -301,9 +308,9 @@ public class BiologyService {
                 + " WHERE lr.voided = FALSE"
                 + "   AND lr.test_name ILIKE ?"
                 + "   AND lr.value_numeric IS NOT NULL"
-                + "   AND lr.exam_date >= ?";
+                + "   AND lr.exam_date >= ? AND lr.exam_date <= ?";
 
-        Object[] args = geoArgs(regionId, districtId, siteId, CD4_NAME_LIKE, since);
+        Object[] args = geoArgs(regionId, districtId, siteId, CD4_NAME_LIKE, since, until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM (SELECT lr.patient_id, lr.exam_date" + baseFrom
@@ -347,7 +354,7 @@ public class BiologyService {
                         + " WHERE lr.voided = FALSE"
                         + "   AND lr.test_name ILIKE ?"
                         + "   AND lr.value_numeric IS NOT NULL"
-                        + "   AND lr.exam_date >= ?"
+                        + "   AND lr.exam_date >= ? AND lr.exam_date <= ?"
                         + " GROUP BY lr.patient_id, lr.exam_date, s.id, s.code, s.name"
                         + SortSpec.orderBy(sort, dir, CD4_SORTABLE,
                                 "lr.exam_date DESC NULLS LAST, lr.patient_id DESC")
@@ -402,7 +409,8 @@ public class BiologyService {
             List<MonthlySuppression> monthlySuppression,
             Cd4Distribution cd4Distribution,
             List<TopTest> topTests,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record MonthlySuppression(

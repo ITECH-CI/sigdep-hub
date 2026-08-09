@@ -67,7 +67,7 @@ export function Landing() {
       <section className="bg-gradient-to-b from-sigdep-50 to-white">
         <div className="mx-auto max-w-6xl px-6 py-12">
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-            Serveur consolidé de données de suivi des patients vivant avec le
+            Base de Données Centrale Consolidée des patients vivant avec le
             VIH en Côte d’Ivoire
           </h1>
           <p className="mt-2 text-ink-muted">Indicateurs clés</p>

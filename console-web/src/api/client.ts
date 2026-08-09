@@ -270,6 +270,18 @@ export function appendScope(params: URLSearchParams, scope: GeoScopeQ): void {
   if (scope.siteId)     params.set('siteId',     String(scope.siteId));
 }
 
+/** Intervalle de période envoyé aux endpoints métier (ISO yyyy-MM-dd). */
+export type PeriodQ = { from: string; to: string };
+
+/**
+ * Append les bornes `from`/`to` d'une période à une URLSearchParams. Bornes
+ * incluses côté serveur. Absentes → le backend retombe sur 12 mois glissants.
+ */
+export function appendPeriod(params: URLSearchParams, period: PeriodQ): void {
+  if (period.from) params.set('from', period.from);
+  if (period.to)   params.set('to',   period.to);
+}
+
 /** Sort spec sent to listing endpoints. `null` means "use the server default". */
 export type SortQ = { key: string; dir: 'asc' | 'desc' } | null;
 
@@ -345,7 +357,8 @@ export type BiologySummary = {
   monthlySuppression: MonthlySuppression[];
   cd4Distribution: Cd4Distribution;
   topTests: TopTest[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type ExamRow = {
@@ -362,9 +375,9 @@ export type ExamRow = {
   patientCode: string | null;
 };
 
-export function fetchBiologySummary(months: number, scope: GeoScopeQ) {
+export function fetchBiologySummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<BiologySummary>(`/api/v1/biology/summary?${params}`);
 }
@@ -380,7 +393,7 @@ export type ExamPage = {
 
 export function fetchBiologyExams(opts: {
   test: ExamFilter;
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -390,7 +403,7 @@ export function fetchBiologyExams(opts: {
 }) {
   const params = new URLSearchParams();
   if (opts.test !== 'all') params.set('test', opts.test);
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -405,17 +418,17 @@ export function fetchBiologyExams(opts: {
  */
 export async function downloadBiologyCsv(opts: {
   test: ExamFilter;
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
 }): Promise<void> {
   const params = new URLSearchParams();
   if (opts.test !== 'all') params.set('test', opts.test);
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   const url = `/api/v1/biology/exams.csv?${params}`;
-  const filename = `biology-${opts.test}-${opts.months}m.csv`;
+  const filename = `biology-${opts.test}-${opts.period.from}_${opts.period.to}.csv`;
   await downloadCsv(url, filename);
 }
 

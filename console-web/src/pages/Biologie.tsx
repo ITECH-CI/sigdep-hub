@@ -22,6 +22,11 @@ import {
 import { Download, Microscope } from "lucide-react";
 import { CardHeader } from "../components/CardHeader";
 import { GeoFilter, GeoScope } from "../components/GeoFilter";
+import {
+  PeriodFilter,
+  PeriodRange,
+  defaultPeriod,
+} from "../components/PeriodFilter";
 import { Kpi, formatInt, formatPercent } from "../components/Kpi";
 import { PageHeader } from "../components/PageHeader";
 import { SortableTh, SortState } from "../components/SortableTh";
@@ -32,6 +37,10 @@ const PERIODS = [
   { months: 24, label: "24 derniers mois" },
   { months: 60, label: "5 dernières années" },
 ];
+
+function periodLabel(p: PeriodRange): string {
+  return `${formatDate(p.from)} – ${formatDate(p.to)}`;
+}
 
 const TABS: { value: ExamFilter; label: string }[] = [
   { value: "vl", label: "Charge virale" },
@@ -55,7 +64,7 @@ function formatExamValue(e: ExamRow): string {
 }
 
 export function Biologie() {
-  const [months, setMonths] = useState(12);
+  const [period, setPeriod] = useState<PeriodRange>(defaultPeriod());
   const [scope, setScope] = useState<GeoScope>({});
   const [tab, setTab] = useState<ExamFilter>("vl");
   const [sort, setSort] = useState<SortState>(null);
@@ -64,14 +73,14 @@ export function Biologie() {
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ["biology-summary", months, scope],
-    queryFn: () => fetchBiologySummary(months, scope),
+    queryKey: ["biology-summary", period, scope],
+    queryFn: () => fetchBiologySummary(period, scope),
   });
 
   const exams = useQuery({
-    queryKey: ["biology-exams", tab, months, scope, sort, page],
+    queryKey: ["biology-exams", tab, period, scope, sort, page],
     queryFn: () =>
-      fetchBiologyExams({ test: tab, months, ...scope, sort, page, size }),
+      fetchBiologyExams({ test: tab, period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -94,7 +103,7 @@ export function Biologie() {
   async function handleExport() {
     setExporting(true);
     try {
-      await downloadBiologyCsv({ test: tab, months, ...scope });
+      await downloadBiologyCsv({ test: tab, period, ...scope });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(err);
@@ -118,20 +127,14 @@ export function Biologie() {
                 setPage(0);
               }}
             />
-            <select
-              value={months}
-              onChange={(e) => {
-                setMonths(Number(e.target.value));
+            <PeriodFilter
+              value={period}
+              presets={PERIODS}
+              onChange={(p) => {
+                setPeriod(p);
                 setPage(0);
               }}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
-            >
-              {PERIODS.map((p) => (
-                <option key={p.months} value={p.months}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+            />
           </>
         }
       />
@@ -148,7 +151,7 @@ export function Biologie() {
           <Kpi
             label="Examens (période)"
             value={summary.isError ? "Erreur" : formatInt(summary.data?.examsInPeriod)}
-            hint={`${PERIODS.find((p) => p.months === months)?.label}`}
+            hint={periodLabel(period)}
             hintTone="neutral"
           />
           <Kpi

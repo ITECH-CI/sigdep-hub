@@ -6,10 +6,13 @@ import ci.itechciv.sigdep.hub.domain.service.BiologyService;
 import ci.itechciv.sigdep.hub.domain.service.BiologyService.BiologySummary;
 import ci.itechciv.sigdep.hub.domain.service.BiologyService.ExamPage;
 import ci.itechciv.sigdep.hub.domain.service.BiologyService.ExamRow;
+import ci.itechciv.sigdep.hub.domain.service.PeriodRange;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,19 +34,21 @@ public class BiologyController {
 
     @GetMapping("/summary")
     public BiologySummary summary(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        int safe = Math.max(1, Math.min(60, months));
-        return service.summary(safe, s.regionId(), s.districtId(), s.siteId());
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.summary(period, s.regionId(), s.districtId(), s.siteId());
     }
 
     @GetMapping("/exams")
     public ExamPage exams(
             @RequestParam(required = false) String test,
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
@@ -52,7 +57,8 @@ public class BiologyController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.exams(test, Math.max(1, Math.min(60, months)),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.exams(test, period,
                 s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
     }
 
@@ -60,18 +66,20 @@ public class BiologyController {
     @GetMapping(value = "/exams.csv", produces = "text/csv;charset=UTF-8")
     public void examsCsv(
             @RequestParam(required = false) String test,
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
             HttpServletResponse response) throws IOException {
 
-        int safeMonths = Math.max(1, Math.min(60, months));
         Scope s = authScope.effective(regionId, districtId, siteId);
-        ExamPage page = service.exams(test, safeMonths,
+        PeriodRange period = PeriodRange.resolve(from, to);
+        ExamPage page = service.exams(test, period,
                 s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
 
-        String filename = "biology-" + (test == null ? "all" : test) + "-" + safeMonths + "m.csv";
+        String filename = "biology-" + (test == null ? "all" : test)
+                + "-" + period.from() + "_" + period.to() + ".csv";
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
