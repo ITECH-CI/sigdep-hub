@@ -7,6 +7,28 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.8] — 2026-08-09
+
+### Ajouté
+
+- **Filtre de période « date début → date fin »** sur les pages console
+  (Biologie, Dépistage, Pharmacie, TPT, Clinique, PTME). Les raccourcis
+  « N derniers mois » sont conservés (ils préremplissent les dates) mais deux
+  champs date début/fin sont désormais toujours visibles et éditables. Côté API,
+  les endpoints métier acceptent `?from=YYYY-MM-DD&to=YYYY-MM-DD` (bornes
+  incluses) ; absent → 12 mois glissants (rétrocompatible). Composant réutilisable
+  `PeriodFilter` (front) et `PeriodRange` (domaine, avec `resolve()` testé).
+- **Script de sauvegarde Postgres** `infra/scripts/backup-hub.sh` : dump
+  compressé horodaté + rotation, périmètre `--scope sigdep` (base métier) ou
+  `--scope full` (`pg_dumpall`, dashboards Superset + rôles inclus). Le hub
+  n'avait aucun backup automatisé auparavant. À planifier en cron (voir
+  `infra/scripts/README.md` et `docs/DEPLOYMENT.md`).
+
+### Modifié
+
+- Titre de la page d'accueil : « Base de Données Centrale Consolidée des patients
+  vivant avec le VIH en Côte d'Ivoire ».
+
 ## [2.1.7] — 2026-08-07
 
 ### Corrigé
