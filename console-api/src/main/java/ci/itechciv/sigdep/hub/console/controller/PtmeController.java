@@ -2,6 +2,7 @@ package ci.itechciv.sigdep.hub.console.controller;
 
 import ci.itechciv.sigdep.hub.console.security.AuthScope;
 import ci.itechciv.sigdep.hub.console.security.AuthScope.Scope;
+import ci.itechciv.sigdep.hub.domain.service.PeriodRange;
 import ci.itechciv.sigdep.hub.domain.service.PtmeService;
 import ci.itechciv.sigdep.hub.domain.service.PtmeService.ChildPage;
 import ci.itechciv.sigdep.hub.domain.service.PtmeService.ChildRecord;
@@ -12,7 +13,9 @@ import ci.itechciv.sigdep.hub.domain.service.PtmeService.MotherSummary;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,23 +35,24 @@ public class PtmeController {
         this.authScope = authScope;
     }
 
-    private static int safeMonths(int m) { return Math.max(1, Math.min(120, m)); }
-
     // --- Mother track ---
 
     @GetMapping("/mothers/summary")
     public MotherSummary motherSummary(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.motherSummary(safeMonths(months), s.regionId(), s.districtId(), s.siteId());
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.motherSummary(period, s.regionId(), s.districtId(), s.siteId());
     }
 
     @GetMapping("/mothers/records")
     public MotherPage motherRecords(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
@@ -57,26 +61,29 @@ public class PtmeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.motherRecords(safeMonths(months),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.motherRecords(period,
                 s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
     }
 
     @GetMapping(value = "/mothers/records.csv", produces = "text/csv;charset=UTF-8")
     public void motherRecordsCsv(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
             HttpServletResponse response) throws IOException {
 
-        int sm = safeMonths(months);
         Scope s = authScope.effective(regionId, districtId, siteId);
-        MotherPage page = service.motherRecords(sm,
+        PeriodRange period = PeriodRange.resolve(from, to);
+        MotherPage page = service.motherRecords(period,
                 s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
 
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
-        response.setHeader("Content-Disposition", "attachment; filename=\"ptme-meres-" + sm + "m.csv\"");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"ptme-meres-" + period.from() + "_" + period.to() + ".csv\"");
 
         DateTimeFormatter df = DateTimeFormatter.ISO_LOCAL_DATE;
         try (PrintWriter w = response.getWriter()) {
@@ -122,17 +129,20 @@ public class PtmeController {
 
     @GetMapping("/children/summary")
     public ChildSummary childSummary(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.childSummary(safeMonths(months), s.regionId(), s.districtId(), s.siteId());
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.childSummary(period, s.regionId(), s.districtId(), s.siteId());
     }
 
     @GetMapping("/children/records")
     public ChildPage childRecords(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
@@ -141,26 +151,29 @@ public class PtmeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.childRecords(safeMonths(months),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.childRecords(period,
                 s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
     }
 
     @GetMapping(value = "/children/records.csv", produces = "text/csv;charset=UTF-8")
     public void childRecordsCsv(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
             HttpServletResponse response) throws IOException {
 
-        int sm = safeMonths(months);
         Scope s = authScope.effective(regionId, districtId, siteId);
-        ChildPage page = service.childRecords(sm,
+        PeriodRange period = PeriodRange.resolve(from, to);
+        ChildPage page = service.childRecords(period,
                 s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
 
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
-        response.setHeader("Content-Disposition", "attachment; filename=\"ptme-enfants-" + sm + "m.csv\"");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"ptme-enfants-" + period.from() + "_" + period.to() + ".csv\"");
 
         DateTimeFormatter df = DateTimeFormatter.ISO_LOCAL_DATE;
         try (PrintWriter w = response.getWriter()) {

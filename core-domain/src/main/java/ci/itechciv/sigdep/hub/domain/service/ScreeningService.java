@@ -54,8 +54,9 @@ public class ScreeningService {
         return out;
     }
 
-    public ScreeningSummary summary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public ScreeningSummary summary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         Long total = jdbc.queryForObject(
@@ -65,20 +66,20 @@ public class ScreeningService {
 
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long pos = jdbc.queryForObject(
                 "SELECT count(*) FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + "   AND sc.final_result = 'POS'",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long neg = jdbc.queryForObject(
                 "SELECT count(*) FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + "   AND sc.final_result = 'NEG'",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         BigDecimal positivityPct = inPeriod == null || inPeriod == 0 ? null
                 : new BigDecimal(pos == null ? 0L : pos)
@@ -88,42 +89,42 @@ public class ScreeningService {
         List<YearBucket> yearly = jdbc.query(
                 "SELECT EXTRACT(year FROM sc.screening_date)::int AS yr, count(*) AS n"
                         + " FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + " GROUP BY yr ORDER BY yr",
                 (rs, i) -> new YearBucket(rs.getInt("yr"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> results = jdbc.query(
                 "SELECT COALESCE(sc.final_result, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> populations = jdbc.query(
                 "SELECT COALESCE(sc.population_type, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> reasons = jdbc.query(
                 "SELECT COALESCE(sc.screening_reason, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> genders = jdbc.query(
                 "SELECT COALESCE(sc.gender, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Porte d'entrée — for each screening_site_type, total screened +
         // positives + positivity rate. Programmatically structuring data:
@@ -134,7 +135,7 @@ public class ScreeningService {
                         + "       count(*) FILTER (WHERE sc.final_result = 'POS') AS pos,"
                         + "       count(*) FILTER (WHERE sc.final_result = 'NEG') AS neg"
                         + " FROM core.screenings sc" + region
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> {
                     long n = rs.getLong("n");
@@ -144,7 +145,7 @@ public class ScreeningService {
                                     .divide(new BigDecimal(n), 1, RoundingMode.HALF_UP);
                     return new SiteTypeStat(rs.getString("k"), n, p, rs.getLong("neg"), rate);
                 },
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new ScreeningSummary(
                 total == null ? 0L : total,
@@ -158,7 +159,8 @@ public class ScreeningService {
                 reasons,
                 genders,
                 siteTypes,
-                months);
+                since,
+                until);
     }
 
     private static final Map<String, String> SCREENING_SORTABLE = Map.of(
@@ -170,13 +172,14 @@ public class ScreeningService {
             "reason",     "sc.screening_reason"
     );
 
-    public RecordPage records(int months, Long regionId, Long districtId, Long siteId,
+    public RecordPage records(PeriodRange period, Long regionId, Long districtId, Long siteId,
                               String sort, String dir,
                               int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         String geoJoin;
         if (siteId != null) {
@@ -193,11 +196,12 @@ public class ScreeningService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.screenings sc"
                         + " JOIN core.sites site ON site.id = sc.site_id" + geoJoin
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?",
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -212,7 +216,7 @@ public class ScreeningService {
                         + "       site.code AS site_code, site.name AS site_name"
                         + " FROM core.screenings sc"
                         + " JOIN core.sites site ON site.id = sc.site_id" + geoJoin
-                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ?"
+                        + " WHERE sc.voided = FALSE AND sc.screening_date >= ? AND sc.screening_date <= ?"
                         + SortSpec.orderBy(sort, dir, SCREENING_SORTABLE,
                                 "sc.screening_date DESC NULLS LAST, sc.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -252,7 +256,8 @@ public class ScreeningService {
             List<Bucket> reasons,
             List<Bucket> genders,
             List<SiteTypeStat> siteTypes,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record YearBucket(int year, long count) {}

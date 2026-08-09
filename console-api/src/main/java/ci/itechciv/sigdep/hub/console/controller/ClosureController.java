@@ -6,10 +6,13 @@ import ci.itechciv.sigdep.hub.domain.service.ClosureService;
 import ci.itechciv.sigdep.hub.domain.service.ClosureService.ClosureRecord;
 import ci.itechciv.sigdep.hub.domain.service.ClosureService.ClosureSummary;
 import ci.itechciv.sigdep.hub.domain.service.ClosureService.RecordPage;
+import ci.itechciv.sigdep.hub.domain.service.PeriodRange;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,18 +34,20 @@ public class ClosureController {
 
     @GetMapping("/summary")
     public ClosureSummary summary(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        int safe = Math.max(1, Math.min(120, months));
-        return service.summary(safe, s.regionId(), s.districtId(), s.siteId());
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.summary(period, s.regionId(), s.districtId(), s.siteId());
     }
 
     @GetMapping("/records")
     public RecordPage records(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
@@ -51,27 +56,29 @@ public class ClosureController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.records(Math.max(1, Math.min(120, months)),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.records(period,
                 s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
     }
 
     @GetMapping(value = "/records.csv", produces = "text/csv;charset=UTF-8")
     public void recordsCsv(
-            @RequestParam(defaultValue = "60") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
             HttpServletResponse response) throws IOException {
 
-        int safeMonths = Math.max(1, Math.min(120, months));
         Scope s = authScope.effective(regionId, districtId, siteId);
-        RecordPage page = service.records(safeMonths,
+        PeriodRange period = PeriodRange.resolve(from, to);
+        RecordPage page = service.records(period,
                 s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
 
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"clotures-" + safeMonths + "m.csv\"");
+                "attachment; filename=\"clotures-" + period.from() + "_" + period.to() + ".csv\"");
 
         DateTimeFormatter df = DateTimeFormatter.ISO_LOCAL_DATE;
         try (PrintWriter w = response.getWriter()) {

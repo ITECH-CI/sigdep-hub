@@ -521,7 +521,8 @@ export type TptSummary = {
   adherence: Bucket[];
   statuses: Bucket[];
   regimens: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type TptRecord = {
@@ -549,15 +550,15 @@ export type TptRecordPage = {
   size: number;
 };
 
-export function fetchTptSummary(months: number, scope: GeoScopeQ) {
+export function fetchTptSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<TptSummary>(`/api/v1/tpt/summary?${params}`);
 }
 
 export function fetchTptRecords(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -566,7 +567,7 @@ export function fetchTptRecords(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -574,12 +575,12 @@ export function fetchTptRecords(opts: {
   return get<TptRecordPage>(`/api/v1/tpt/records?${params}`);
 }
 
-export async function downloadTptCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadTptCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   const url = `/api/v1/tpt/records.csv?${params}`;
-  await downloadCsv(url, `tpt-${months}m.csv`);
+  await downloadCsv(url, `tpt-${period.from}_${period.to}.csv`);
 }
 
 // --- Dépistage (HIV screening) --------------------------------------------
@@ -604,7 +605,8 @@ export type ScreeningSummary = {
   reasons: Bucket[];
   genders: Bucket[];
   siteTypes: ScreeningSiteTypeStat[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type ScreeningRecord = {
@@ -631,15 +633,15 @@ export type ScreeningRecordPage = {
   size: number;
 };
 
-export function fetchScreeningSummary(months: number, scope: GeoScopeQ) {
+export function fetchScreeningSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<ScreeningSummary>(`/api/v1/screenings/summary?${params}`);
 }
 
 export function fetchScreeningRecords(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -648,7 +650,7 @@ export function fetchScreeningRecords(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -656,12 +658,12 @@ export function fetchScreeningRecords(opts: {
   return get<ScreeningRecordPage>(`/api/v1/screenings/records?${params}`);
 }
 
-export async function downloadScreeningCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadScreeningCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   const url = `/api/v1/screenings/records.csv?${params}`;
-  await downloadCsv(url, `depistage-${months}m.csv`);
+  await downloadCsv(url, `depistage-${period.from}_${period.to}.csv`);
 }
 
 // --- PTME -----------------------------------------------------------------
@@ -675,7 +677,8 @@ export type PtmeMotherSummary = {
   yearly: YearBucket[];
   outcomes: Bucket[];
   arvAtRegistering: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type PtmeMotherRecord = {
@@ -714,7 +717,8 @@ export type PtmeChildSummary = {
   yearly: YearBucket[];
   followupResults: Bucket[];
   pcr1: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type PtmeChildRecord = {
@@ -744,15 +748,15 @@ export type PtmeChildPage = {
   size: number;
 };
 
-export function fetchPtmeMotherSummary(months: number, scope: GeoScopeQ) {
+export function fetchPtmeMotherSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<PtmeMotherSummary>(`/api/v1/ptme/mothers/summary?${params}`);
 }
 
 export function fetchPtmeMotherRecords(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -761,7 +765,7 @@ export function fetchPtmeMotherRecords(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -769,22 +773,22 @@ export function fetchPtmeMotherRecords(opts: {
   return get<PtmeMotherPage>(`/api/v1/ptme/mothers/records?${params}`);
 }
 
-export async function downloadPtmeMotherCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadPtmeMotherCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
-  await downloadCsv(`/api/v1/ptme/mothers/records.csv?${params}`, `ptme-meres-${months}m.csv`);
+  await downloadCsv(`/api/v1/ptme/mothers/records.csv?${params}`, `ptme-meres-${period.from}_${period.to}.csv`);
 }
 
-export function fetchPtmeChildSummary(months: number, scope: GeoScopeQ) {
+export function fetchPtmeChildSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<PtmeChildSummary>(`/api/v1/ptme/children/summary?${params}`);
 }
 
 export function fetchPtmeChildRecords(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -793,7 +797,7 @@ export function fetchPtmeChildRecords(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -801,11 +805,11 @@ export function fetchPtmeChildRecords(opts: {
   return get<PtmeChildPage>(`/api/v1/ptme/children/records?${params}`);
 }
 
-export async function downloadPtmeChildCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadPtmeChildCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
-  await downloadCsv(`/api/v1/ptme/children/records.csv?${params}`, `ptme-enfants-${months}m.csv`);
+  await downloadCsv(`/api/v1/ptme/children/records.csv?${params}`, `ptme-enfants-${period.from}_${period.to}.csv`);
 }
 
 // --- Clinic (suivi clinique) -----------------------------------------------
@@ -823,7 +827,8 @@ export type ClinicSummary = {
   whoStageDistribution: Bucket[];
   tbScreeningDistribution: Bucket[];
   arvRegimenDistribution: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type VisitRow = {
@@ -856,15 +861,15 @@ export type VisitPage = {
   size: number;
 };
 
-export function fetchClinicSummary(months: number, scope: GeoScopeQ) {
+export function fetchClinicSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<ClinicSummary>(`/api/v1/clinic/summary?${params}`);
 }
 
 export function fetchClinicVisits(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -873,7 +878,7 @@ export function fetchClinicVisits(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -881,12 +886,12 @@ export function fetchClinicVisits(opts: {
   return get<VisitPage>(`/api/v1/clinic/visits?${params}`);
 }
 
-export async function downloadClinicCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadClinicCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   const url = `/api/v1/clinic/visits.csv?${params}`;
-  await downloadCsv(url, `clinique-${months}m.csv`);
+  await downloadCsv(url, `clinique-${period.from}_${period.to}.csv`);
 }
 
 // --- Initiations (fiche initiale) -----------------------------------------
@@ -901,7 +906,8 @@ export type InitiationSummary = {
   entryPoints: Bucket[];
   regimens: Bucket[];
   whoStages: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type InitiationRecord = {
@@ -930,15 +936,15 @@ export type InitiationRecordPage = {
   size: number;
 };
 
-export function fetchInitiationSummary(months: number, scope: GeoScopeQ) {
+export function fetchInitiationSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<InitiationSummary>(`/api/v1/initiations/summary?${params}`);
 }
 
 export function fetchInitiationRecords(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -947,7 +953,7 @@ export function fetchInitiationRecords(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -955,11 +961,11 @@ export function fetchInitiationRecords(opts: {
   return get<InitiationRecordPage>(`/api/v1/initiations/records?${params}`);
 }
 
-export async function downloadInitiationCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadInitiationCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
-  await downloadCsv(`/api/v1/initiations/records.csv?${params}`, `initiations-${months}m.csv`);
+  await downloadCsv(`/api/v1/initiations/records.csv?${params}`, `initiations-${period.from}_${period.to}.csv`);
 }
 
 // --- Closures (clôtures) ---------------------------------------------------
@@ -973,7 +979,8 @@ export type ClosureSummary = {
   yearly: YearBucket[];
   types: Bucket[];
   deathCauses: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type ClosureRecord = {
@@ -1002,15 +1009,15 @@ export type ClosureRecordPage = {
   size: number;
 };
 
-export function fetchClosureSummary(months: number, scope: GeoScopeQ) {
+export function fetchClosureSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<ClosureSummary>(`/api/v1/closures/summary?${params}`);
 }
 
 export function fetchClosureRecords(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -1019,7 +1026,7 @@ export function fetchClosureRecords(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -1027,11 +1034,11 @@ export function fetchClosureRecords(opts: {
   return get<ClosureRecordPage>(`/api/v1/closures/records?${params}`);
 }
 
-export async function downloadClosureCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadClosureCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
-  await downloadCsv(`/api/v1/closures/records.csv?${params}`, `clotures-${months}m.csv`);
+  await downloadCsv(`/api/v1/closures/records.csv?${params}`, `clotures-${period.from}_${period.to}.csv`);
 }
 
 // --- IVSA (sub-module de Clinique) -----------------------------------------
@@ -1043,7 +1050,8 @@ export type IvsaSummary = {
   withAlertSigns: number;
   successPct: number | null;
   msdDistribution: Bucket[];
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type IvsaRow = {
@@ -1069,15 +1077,15 @@ export type IvsaPage = {
   size: number;
 };
 
-export function fetchIvsaSummary(months: number, scope: GeoScopeQ) {
+export function fetchIvsaSummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<IvsaSummary>(`/api/v1/clinic/ivsa/summary?${params}`);
 }
 
 export function fetchIvsaVisits(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -1086,7 +1094,7 @@ export function fetchIvsaVisits(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -1094,11 +1102,11 @@ export function fetchIvsaVisits(opts: {
   return get<IvsaPage>(`/api/v1/clinic/ivsa/visits?${params}`);
 }
 
-export async function downloadIvsaCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadIvsaCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
-  await downloadCsv(`/api/v1/clinic/ivsa/visits.csv?${params}`, `ivsa-${months}m.csv`);
+  await downloadCsv(`/api/v1/clinic/ivsa/visits.csv?${params}`, `ivsa-${period.from}_${period.to}.csv`);
 }
 
 // --- Users (gestion des comptes, auth v2.0) --------------------------------
@@ -1384,7 +1392,8 @@ export type PharmacySummary = {
   monthly: MonthlyCount[];
   regimens: RegimenBucket[];
   durations: DurationBuckets;
-  periodMonths: number;
+  periodFrom: string;
+  periodTo: string;
 };
 
 export type DispensationRow = {
@@ -1407,15 +1416,15 @@ export type DispensationPage = {
   size: number;
 };
 
-export function fetchPharmacySummary(months: number, scope: GeoScopeQ) {
+export function fetchPharmacySummary(period: PeriodQ, scope: GeoScopeQ) {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   return get<PharmacySummary>(`/api/v1/pharmacy/summary?${params}`);
 }
 
 export function fetchPharmacyDispensations(opts: {
-  months: number;
+  period: PeriodQ;
   regionId?: number;
   districtId?: number;
   siteId?: number;
@@ -1424,7 +1433,7 @@ export function fetchPharmacyDispensations(opts: {
   size?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('months', String(opts.months));
+  appendPeriod(params, opts.period);
   appendScope(params, opts);
   appendSort(params, opts.sort ?? null);
   params.set('page', String(opts.page ?? 0));
@@ -1432,12 +1441,12 @@ export function fetchPharmacyDispensations(opts: {
   return get<DispensationPage>(`/api/v1/pharmacy/dispensations?${params}`);
 }
 
-export async function downloadPharmacyCsv(months: number, scope: GeoScopeQ): Promise<void> {
+export async function downloadPharmacyCsv(period: PeriodQ, scope: GeoScopeQ): Promise<void> {
   const params = new URLSearchParams();
-  params.set('months', String(months));
+  appendPeriod(params, period);
   appendScope(params, scope);
   const url = `/api/v1/pharmacy/dispensations.csv?${params}`;
-  await downloadCsv(url, `pharmacie-${months}m.csv`);
+  await downloadCsv(url, `pharmacie-${period.from}_${period.to}.csv`);
 }
 
 // --- Sync rejected records -------------------------------------------------

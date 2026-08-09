@@ -74,8 +74,9 @@ public class ClosureService {
         return out;
     }
 
-    public ClosureSummary summary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public ClosureSummary summary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         Long total = jdbc.queryForObject(
@@ -85,8 +86,8 @@ public class ClosureService {
 
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.closures c" + region
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         // Upstream codes are upper-case English enums (DEATH, TRANSFER, …),
         // but a legacy payload could be lower-cased or already translated —
@@ -94,15 +95,15 @@ public class ClosureService {
         // substring rather than the localised label.
         Long deaths = jdbc.queryForObject(
                 "SELECT count(*) FROM core.closures c" + region
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?"
                         + "   AND upper(coalesce(c.closure_type, '')) LIKE '%DEATH%'",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long transfers = jdbc.queryForObject(
                 "SELECT count(*) FROM core.closures c" + region
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?"
                         + "   AND upper(coalesce(c.closure_type, '')) LIKE '%TRANSFER%'",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         BigDecimal mortalityPct = inPeriod == null || inPeriod == 0 ? null
                 : new BigDecimal(deaths == null ? 0L : deaths)
@@ -112,27 +113,27 @@ public class ClosureService {
         List<YearBucket> yearly = jdbc.query(
                 "SELECT EXTRACT(year FROM c.closure_date)::int AS yr, count(*) AS n"
                         + " FROM core.closures c" + region
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?"
                         + " GROUP BY yr ORDER BY yr",
                 (rs, i) -> new YearBucket(rs.getInt("yr"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> types = jdbc.query(
                 "SELECT " + CLOSURE_TYPE_LABEL + " AS k, count(*) AS n"
                         + " FROM core.closures c" + region
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> deathCauses = jdbc.query(
                 "SELECT COALESCE(c.death_cause_text, c.death_cause_code, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.closures c" + region
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?"
                         + "   AND upper(coalesce(c.closure_type, '')) LIKE '%DEATH%'"
                         + " GROUP BY k ORDER BY n DESC LIMIT 10",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new ClosureSummary(
                 total == null ? 0L : total,
@@ -140,7 +141,7 @@ public class ClosureService {
                 deaths == null ? 0L : deaths,
                 transfers == null ? 0L : transfers,
                 mortalityPct,
-                yearly, types, deathCauses, months);
+                yearly, types, deathCauses, since, until);
     }
 
     private static final Map<String, String> CLOSURE_SORTABLE = Map.of(
@@ -150,12 +151,13 @@ public class ClosureService {
             "type",    "c.closure_type"
     );
 
-    public RecordPage records(int months, Long regionId, Long districtId, Long siteId,
+    public RecordPage records(PeriodRange period, Long regionId, Long districtId, Long siteId,
                               String sort, String dir, int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         String geoJoin;
         if (siteId != null)          geoJoin = " AND site.id = ?";
@@ -167,11 +169,12 @@ public class ClosureService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.closures c"
                         + " JOIN core.sites site ON site.id = c.site_id" + geoJoin
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?",
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -191,7 +194,7 @@ public class ClosureService {
                         + "         ORDER BY pi.id LIMIT 1) AS patient_code"
                         + " FROM core.closures c"
                         + " JOIN core.sites site ON site.id = c.site_id" + geoJoin
-                        + " WHERE c.voided = FALSE AND c.closure_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.closure_date >= ? AND c.closure_date <= ?"
                         + SortSpec.orderBy(sort, dir, CLOSURE_SORTABLE,
                                 "c.closure_date DESC NULLS LAST, c.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -233,7 +236,8 @@ public class ClosureService {
             List<YearBucket> yearly,
             List<Bucket> types,
             List<Bucket> deathCauses,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record ClosureRecord(

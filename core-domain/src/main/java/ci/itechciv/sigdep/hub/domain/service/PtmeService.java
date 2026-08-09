@@ -57,8 +57,9 @@ public class PtmeService {
 
     // --- Mother track ----------------------------------------------------
 
-    public MotherSummary motherSummary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public MotherSummary motherSummary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter("m", regionId, districtId, siteId);
 
         Long total = jdbc.queryForObject(
@@ -68,20 +69,20 @@ public class PtmeService {
 
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_mothers m" + region
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long spousalScreened = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_mothers m" + region
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?"
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?"
                         + "   AND m.spousal_screening_result IS NOT NULL",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long spousalPos = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_mothers m" + region
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?"
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?"
                         + "   AND m.spousal_screening_result = 'POS'",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         BigDecimal spousalCoveragePct = inPeriod == null || inPeriod == 0 ? null
                 : new BigDecimal(spousalScreened == null ? 0L : spousalScreened)
@@ -91,26 +92,26 @@ public class PtmeService {
         List<YearBucket> yearly = jdbc.query(
                 "SELECT EXTRACT(year FROM m.start_date)::int AS yr, count(*) AS n"
                         + " FROM core.ptme_mothers m" + region
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?"
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?"
                         + " GROUP BY yr ORDER BY yr",
                 (rs, i) -> new YearBucket(rs.getInt("yr"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> outcomes = jdbc.query(
                 "SELECT COALESCE(m.pregnancy_outcome, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.ptme_mothers m" + region
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?"
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> arvAtRegistering = jdbc.query(
                 "SELECT COALESCE(m.arv_status_at_registering, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.ptme_mothers m" + region
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?"
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new MotherSummary(
                 total == null ? 0L : total,
@@ -118,7 +119,7 @@ public class PtmeService {
                 spousalScreened == null ? 0L : spousalScreened,
                 spousalPos == null ? 0L : spousalPos,
                 spousalCoveragePct,
-                yearly, outcomes, arvAtRegistering, months);
+                yearly, outcomes, arvAtRegistering, since, until);
     }
 
     private static final Map<String, String> MOTHER_SORTABLE = Map.of(
@@ -129,12 +130,13 @@ public class PtmeService {
             "arv",     "m.arv_status_at_registering"
     );
 
-    public MotherPage motherRecords(int months, Long regionId, Long districtId, Long siteId,
+    public MotherPage motherRecords(PeriodRange period, Long regionId, Long districtId, Long siteId,
                                     String sort, String dir, int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         String geoJoin;
         if (siteId != null)        geoJoin = " AND site.id = ?";
@@ -146,11 +148,12 @@ public class PtmeService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_mothers m"
                         + " JOIN core.sites site ON site.id = m.site_id" + geoJoin
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?",
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -167,7 +170,7 @@ public class PtmeService {
                         + "       site.code AS site_code, site.name AS site_name"
                         + " FROM core.ptme_mothers m"
                         + " JOIN core.sites site ON site.id = m.site_id" + geoJoin
-                        + " WHERE m.voided = FALSE AND m.start_date >= ?"
+                        + " WHERE m.voided = FALSE AND m.start_date >= ? AND m.start_date <= ?"
                         + SortSpec.orderBy(sort, dir, MOTHER_SORTABLE,
                                 "m.start_date DESC NULLS LAST, m.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -196,8 +199,9 @@ public class PtmeService {
 
     // --- Child track -----------------------------------------------------
 
-    public ChildSummary childSummary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public ChildSummary childSummary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter("c", regionId, districtId, siteId);
 
         Long total = jdbc.queryForObject(
@@ -207,22 +211,22 @@ public class PtmeService {
 
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_children c" + region
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         // Any positive PCR or serology counts the child as HIV positive.
         Long anyPositive = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_children c" + region
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?"
                         + "   AND ('POS' IN (c.pcr1_result, c.pcr2_result, c.pcr3_result,"
                         + "                  c.hiv_serology1_result, c.hiv_serology2_result))",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long prophylaxisGiven = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_children c" + region
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?"
                         + "   AND c.arv_prophylaxis_given = 'Oui'",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         BigDecimal positivityPct = inPeriod == null || inPeriod == 0 ? null
                 : new BigDecimal(anyPositive == null ? 0L : anyPositive)
@@ -232,27 +236,27 @@ public class PtmeService {
         List<YearBucket> yearly = jdbc.query(
                 "SELECT EXTRACT(year FROM c.birth_date)::int AS yr, count(*) AS n"
                         + " FROM core.ptme_children c" + region
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?"
                         + " GROUP BY yr ORDER BY yr",
                 (rs, i) -> new YearBucket(rs.getInt("yr"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> followupResults = jdbc.query(
                 "SELECT COALESCE(c.followup_result, '(en cours)') AS k, count(*) AS n"
                         + " FROM core.ptme_children c" + region
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // PCR1 results — most informative cascade step
         List<Bucket> pcr1 = jdbc.query(
                 "SELECT COALESCE(c.pcr1_result, '(non fait)') AS k, count(*) AS n"
                         + " FROM core.ptme_children c" + region
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new ChildSummary(
                 total == null ? 0L : total,
@@ -260,7 +264,7 @@ public class PtmeService {
                 anyPositive == null ? 0L : anyPositive,
                 prophylaxisGiven == null ? 0L : prophylaxisGiven,
                 positivityPct,
-                yearly, followupResults, pcr1, months);
+                yearly, followupResults, pcr1, since, until);
     }
 
     private static final Map<String, String> CHILD_SORTABLE = Map.of(
@@ -270,12 +274,13 @@ public class PtmeService {
             "result",  "c.followup_result"
     );
 
-    public ChildPage childRecords(int months, Long regionId, Long districtId, Long siteId,
+    public ChildPage childRecords(PeriodRange period, Long regionId, Long districtId, Long siteId,
                                   String sort, String dir, int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         String geoJoin;
         if (siteId != null)        geoJoin = " AND site.id = ?";
@@ -287,11 +292,12 @@ public class PtmeService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.ptme_children c"
                         + " JOIN core.sites site ON site.id = c.site_id" + geoJoin
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?",
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -308,7 +314,7 @@ public class PtmeService {
                         + "       site.code AS site_code, site.name AS site_name"
                         + " FROM core.ptme_children c"
                         + " JOIN core.sites site ON site.id = c.site_id" + geoJoin
-                        + " WHERE c.voided = FALSE AND c.birth_date >= ?"
+                        + " WHERE c.voided = FALSE AND c.birth_date >= ? AND c.birth_date <= ?"
                         + SortSpec.orderBy(sort, dir, CHILD_SORTABLE,
                                 "c.birth_date DESC NULLS LAST, c.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -353,7 +359,8 @@ public class PtmeService {
             List<YearBucket> yearly,
             List<Bucket> outcomes,
             List<Bucket> arvAtRegistering,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record MotherRecord(
@@ -392,7 +399,8 @@ public class PtmeService {
             List<YearBucket> yearly,
             List<Bucket> followupResults,
             List<Bucket> pcr1,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record ChildRecord(
