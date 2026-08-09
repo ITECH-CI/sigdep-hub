@@ -104,16 +104,27 @@ Linux sites, WinSW / NSSM wrapper on Windows sites).
 
 ### Backups
 
-```bash
-# Daily dump of the consolidated database
-docker exec sigdep-postgres pg_dump -U sigdep sigdep \
-  | gzip > /var/backups/sigdep-$(date +%F).sql.gz
+Utiliser le script fourni **`infra/scripts/backup-hub.sh`** (dump compressé
+horodaté + rotation + vérification d'intégrité). Deux périmètres :
 
-# Keep at least 30 days. Encrypt offsite if patient data is on it.
+- `--scope sigdep` (défaut) : base `sigdep` seule — `core.*`, `audit.*` et
+  `auth.*` (comptes, clés API, refresh tokens). Pas de base auth séparée à
+  sauvegarder. **N'inclut PAS** les dashboards Superset.
+- `--scope full` : `pg_dumpall` — toute l'instance, dont `superset_meta`
+  (dashboards / datasets Superset) et les rôles Postgres. **Recommandé** pour la
+  sauvegarde automatique : rien n'est perdu lors d'un déplacement de serveur.
+
+```bash
+# Cron : dump complet quotidien à 02h30, rétention 30 jours (défaut)
+30 2 * * *  /opt/sigdep-hub/infra/scripts/backup-hub.sh --scope full \
+            >> /var/log/sigdep-backup.log 2>&1
 ```
 
-Le dump ci-dessus inclut le schéma `auth` (comptes utilisateurs, clés
-API, refresh tokens) : pas de base séparée à sauvegarder.
+> Un dump local ne protège pas d'une perte du serveur : répliquer
+> `/var/backups/sigdep` hors-site (rsync/rclone/S3) et **chiffrer** — le dump
+> contient des données patients.
+
+Détails et options : `infra/scripts/README.md`.
 
 ### Upgrades
 
@@ -143,15 +154,33 @@ Replace the certs in `infra/nginx/certs/` and run
 
 ### Disaster recovery
 
-Cold-restoring from a daily dump:
+Restauration à froid depuis un dump produit par `backup-hub.sh`. La procédure
+dépend du **scope** du dump (voir le nom du fichier `sigdep-<scope>-…`).
+
+**Scope `full`** (dump `pg_dumpall`, restauration complète de l'instance —
+recommandée pour un déplacement de serveur, restaure aussi Superset) :
 
 ```bash
-docker compose -f docker-compose.prod.yml down
-# Restore the Postgres volume from backup, OR:
-gunzip -c /var/backups/sigdep-YYYY-MM-DD.sql.gz | \
+docker compose -f docker-compose.prod.yml up -d postgres   # instance vierge
+# pg_dumpall se restaure sur la base d'amorçage 'postgres' ; il recrée les
+# bases (sigdep, superset_meta) et les rôles.
+gunzip -c /var/backups/sigdep/sigdep-full-YYYY-MM-DD_HHMMSS.sql.gz | \
+  docker exec -i sigdep-postgres psql -U sigdep -d postgres
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**Scope `sigdep`** (base métier seule ; le dump est `--clean --if-exists`, donc
+ré-applicable sur une base existante) :
+
+```bash
+docker compose -f docker-compose.prod.yml up -d postgres
+gunzip -c /var/backups/sigdep/sigdep-sigdep-YYYY-MM-DD_HHMMSS.sql.gz | \
   docker exec -i sigdep-postgres psql -U sigdep -d sigdep
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Agents will retry pending batches from their local SQLite buffer, so up
-to a few hours of in-flight syncs are recovered automatically.
+> Un dump `sigdep` ne restaure pas les dashboards Superset (base
+> `superset_meta`) : les recréer, ou repartir d'un dump `full`.
+
+Les agents rejouent les batches en attente depuis leur buffer SQLite local :
+jusqu'à quelques heures de synchro en vol sont récupérées automatiquement.

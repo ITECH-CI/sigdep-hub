@@ -71,6 +71,71 @@ Pour forcer un agent terrain à **tout re-extraire** depuis openmrs
 
 ---
 
+## `backup-hub.sh`
+
+Sauvegarde la base Postgres du hub dans un **dump compressé horodaté**, avec
+**rotation** (rétention en jours). C'est la sauvegarde de secours du hub — à
+planifier en cron sur le serveur de production.
+
+### Deux périmètres (`--scope`)
+
+| Scope | Contenu | Quand |
+| ----- | ------- | ----- |
+| `sigdep` (défaut) | base `sigdep` seule : `core.*` (métier), `audit.*` (rejets), `auth.*` (comptes, clés API) | dump ciblé rapide du métier |
+| `full` | **toute l'instance** via `pg_dumpall` : `sigdep` + `superset_meta` (**dashboards / datasets Superset**) + rôles Postgres | restauration à l'identique, déplacement de serveur |
+
+> ⚠️ Le scope `sigdep` **n'inclut pas** les dashboards Superset (ils vivent dans
+> la base `superset_meta`). Pour ne rien perdre lors d'un déplacement de base,
+> utiliser `--scope full`. C'est le scope recommandé pour la sauvegarde
+> quotidienne automatique.
+
+### Usage
+
+```bash
+# Base métier seule, rétention 30 jours, dans /var/backups/sigdep
+./backup-hub.sh
+
+# Tout (Superset + rôles inclus) — recommandé pour le cron quotidien
+./backup-hub.sh --scope full
+
+# Répertoire et rétention personnalisés
+./backup-hub.sh --scope full --dir /mnt/backups --retention 60
+```
+
+Sortie : `sigdep-<scope>-YYYY-MM-DD_HHMMSS.sql.gz`. Le dump est écrit dans un
+fichier `.part` renommé seulement après succès + vérification (taille non nulle,
+intégrité gzip) — jamais de dump tronqué d'apparence valide. La rotation ne
+supprime que les dumps du **même scope**.
+
+### Planification (cron)
+
+```cron
+# Dump complet quotidien à 02h30, journalisé
+30 2 * * *  /opt/sigdep-hub/infra/scripts/backup-hub.sh --scope full \
+            >> /var/log/sigdep-backup.log 2>&1
+```
+
+> **Copie hors-site.** Un dump sur le même serveur ne protège pas d'une perte du
+> serveur. Répliquer `/var/backups/sigdep` vers un stockage distant (rsync,
+> rclone, S3…) et **chiffrer** (le dump contient des données patients).
+
+### Restauration
+
+Voir `docs/DEPLOYMENT.md`, section « Disaster recovery » — procédure par scope.
+
+### Variables d'environnement reconnues
+
+| Variable                        | Défaut               | Rôle                     |
+| ------------------------------- | -------------------- | ------------------------ |
+| `SIGDEP_DB_CONTAINER`           | `sigdep-postgres`    | Container Postgres       |
+| `SIGDEP_DB_NAME`                | `sigdep`             | Base (`--scope sigdep`)  |
+| `SIGDEP_DB_USER`                | `sigdep`             | User Postgres            |
+| `SIGDEP_BACKUP_DIR`             | `/var/backups/sigdep`| Répertoire des dumps     |
+| `SIGDEP_BACKUP_RETENTION_DAYS`  | `30`                 | Rétention (jours)        |
+| `SIGDEP_BACKUP_SCOPE`           | `sigdep`             | Scope par défaut         |
+
+---
+
 ## `scan_htmlforms.py` / `build_org_csvs.py`
 
 Scripts Python utilitaires pour, respectivement :
