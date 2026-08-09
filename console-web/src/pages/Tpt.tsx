@@ -11,6 +11,7 @@ import {
 import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
+import { PeriodFilter, PeriodRange, defaultPeriod } from '../components/PeriodFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
 import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from '../components/Skeleton';
 
@@ -27,8 +28,12 @@ function formatDate(iso: string | null): string {
     { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function periodLabel(p: PeriodRange): string {
+  return `${formatDate(p.from)} – ${formatDate(p.to)}`;
+}
+
 export function Tpt() {
-  const [months, setMonths] = useState(60);
+  const [period, setPeriod] = useState<PeriodRange>(defaultPeriod());
   const [scope, setScope] = useState<GeoScope>({});
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
@@ -36,12 +41,12 @@ export function Tpt() {
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ['tpt-summary', months, scope],
-    queryFn: () => fetchTptSummary(months, scope),
+    queryKey: ['tpt-summary', period, scope],
+    queryFn: () => fetchTptSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ['tpt-records', months, scope, sort, page],
-    queryFn: () => fetchTptRecords({ months, ...scope, sort, page, size }),
+    queryKey: ['tpt-records', period, scope, sort, page],
+    queryFn: () => fetchTptRecords({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -50,7 +55,7 @@ export function Tpt() {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadTptCsv(months, scope); }
+    try { await downloadTptCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -63,14 +68,8 @@ export function Tpt() {
         subtitle="Thérapie préventive de la tuberculose"
         right={<>
           <GeoFilter value={scope} onChange={s => { setScope(s); setPage(0); }} />
-          <select
-            value={months}
-            onChange={e => { setMonths(Number(e.target.value)); setPage(0); }}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white">
-            {PERIODS.map(p => (
-              <option key={p.months} value={p.months}>{p.label}</option>
-            ))}
-          </select>
+          <PeriodFilter value={period} presets={PERIODS}
+            onChange={p => { setPeriod(p); setPage(0); }} />
           <button
             onClick={handleExport}
             disabled={exporting || !records.data || records.data.total === 0}
@@ -90,7 +89,7 @@ export function Tpt() {
                hintTone="neutral" />
           <Kpi label="TPT démarrés"
                value={summary.isError ? 'Erreur' : formatInt(summary.data?.startedInPeriod)}
-               hint={`${PERIODS.find(p => p.months === months)?.label}`}
+               hint={periodLabel(period)}
                hintTone="neutral" />
           <Kpi label="TPT terminés"
                value={summary.isError ? 'Erreur' : formatInt(summary.data?.completedInPeriod)}

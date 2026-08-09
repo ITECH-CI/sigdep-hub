@@ -11,6 +11,7 @@ import {
 import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
+import { PeriodFilter, PeriodRange, defaultPeriod } from '../components/PeriodFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
 import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from '../components/Skeleton';
 
@@ -26,8 +27,12 @@ function formatDate(iso: string | null): string {
     { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function periodLabel(p: PeriodRange): string {
+  return `${formatDate(p.from)} – ${formatDate(p.to)}`;
+}
+
 export function Pharmacie() {
-  const [months, setMonths] = useState(12);
+  const [period, setPeriod] = useState<PeriodRange>(defaultPeriod());
   const [scope, setScope] = useState<GeoScope>({});
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
@@ -35,12 +40,12 @@ export function Pharmacie() {
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ['pharmacy-summary', months, scope],
-    queryFn: () => fetchPharmacySummary(months, scope),
+    queryKey: ['pharmacy-summary', period, scope],
+    queryFn: () => fetchPharmacySummary(period, scope),
   });
   const dispensations = useQuery({
-    queryKey: ['pharmacy-dispensations', months, scope, sort, page],
-    queryFn: () => fetchPharmacyDispensations({ months, ...scope, sort, page, size }),
+    queryKey: ['pharmacy-dispensations', period, scope, sort, page],
+    queryFn: () => fetchPharmacyDispensations({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -51,7 +56,7 @@ export function Pharmacie() {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadPharmacyCsv(months, scope); }
+    try { await downloadPharmacyCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -72,14 +77,8 @@ export function Pharmacie() {
         subtitle="Dispensations ARV · régimes, durées, file pharmacie"
         right={<>
           <GeoFilter value={scope} onChange={s => { setScope(s); setPage(0); }} />
-          <select
-            value={months}
-            onChange={e => { setMonths(Number(e.target.value)); setPage(0); }}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white">
-            {PERIODS.map(p => (
-              <option key={p.months} value={p.months}>{p.label}</option>
-            ))}
-          </select>
+          <PeriodFilter value={period} presets={PERIODS}
+            onChange={p => { setPeriod(p); setPage(0); }} />
           <button
             onClick={handleExport}
             disabled={exporting || !dispensations.data || dispensations.data.total === 0}
@@ -95,7 +94,7 @@ export function Pharmacie() {
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
           <Kpi label="Dispensations (période)"
                value={summary.isError ? 'Erreur' : formatInt(summary.data?.dispensationsInPeriod)}
-               hint={`${PERIODS.find(p => p.months === months)?.label}`}
+               hint={periodLabel(period)}
                hintTone="neutral" />
           <Kpi label="Patients sous ARV"
                value={summary.isError ? 'Erreur' : formatInt(summary.data?.patientsOnArvInPeriod)}

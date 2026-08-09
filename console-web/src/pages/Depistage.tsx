@@ -11,6 +11,7 @@ import {
 import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
+import { PeriodFilter, PeriodRange, defaultPeriod } from '../components/PeriodFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
 import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from '../components/Skeleton';
 
@@ -27,6 +28,10 @@ function formatDate(iso: string | null): string {
     { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function periodLabel(p: PeriodRange): string {
+  return `${formatDate(p.from)} – ${formatDate(p.to)}`;
+}
+
 function resultBadge(r: string | null) {
   if (r === 'POS') return <span className="px-2 py-0.5 rounded text-xs font-medium bg-rose-50 text-rose-700">POS</span>;
   if (r === 'NEG') return <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">NEG</span>;
@@ -35,7 +40,7 @@ function resultBadge(r: string | null) {
 }
 
 export function Depistage() {
-  const [months, setMonths] = useState(60);
+  const [period, setPeriod] = useState<PeriodRange>(defaultPeriod());
   const [scope, setScope] = useState<GeoScope>({});
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
@@ -43,12 +48,12 @@ export function Depistage() {
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ['screening-summary', months, scope],
-    queryFn: () => fetchScreeningSummary(months, scope),
+    queryKey: ['screening-summary', period, scope],
+    queryFn: () => fetchScreeningSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ['screening-records', months, scope, sort, page],
-    queryFn: () => fetchScreeningRecords({ months, ...scope, sort, page, size }),
+    queryKey: ['screening-records', period, scope, sort, page],
+    queryFn: () => fetchScreeningRecords({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -57,7 +62,7 @@ export function Depistage() {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadScreeningCsv(months, scope); }
+    try { await downloadScreeningCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -70,14 +75,8 @@ export function Depistage() {
         subtitle="Dépistage VIH (module HIV Screening)"
         right={<>
           <GeoFilter value={scope} onChange={s => { setScope(s); setPage(0); }} />
-          <select
-            value={months}
-            onChange={e => { setMonths(Number(e.target.value)); setPage(0); }}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white">
-            {PERIODS.map(p => (
-              <option key={p.months} value={p.months}>{p.label}</option>
-            ))}
-          </select>
+          <PeriodFilter value={period} presets={PERIODS}
+            onChange={p => { setPeriod(p); setPage(0); }} />
           <button
             onClick={handleExport}
             disabled={exporting || !records.data || records.data.total === 0}
@@ -97,7 +96,7 @@ export function Depistage() {
                hintTone="neutral" />
           <Kpi label="Dépistés"
                value={summary.isError ? 'Erreur' : formatInt(summary.data?.screenedInPeriod)}
-               hint={`${PERIODS.find(p => p.months === months)?.label}`}
+               hint={periodLabel(period)}
                hintTone="neutral" />
           <Kpi label="Positifs"
                value={summary.isError ? 'Erreur' : formatInt(summary.data?.positiveInPeriod)}

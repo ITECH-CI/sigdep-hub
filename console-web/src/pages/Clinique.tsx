@@ -24,6 +24,11 @@ import {
 import { Kpi, formatInt, formatPercent } from "../components/Kpi";
 import { PageHeader } from "../components/PageHeader";
 import { GeoFilter, GeoScope } from "../components/GeoFilter";
+import {
+  PeriodFilter,
+  PeriodRange,
+  defaultPeriod,
+} from "../components/PeriodFilter";
 import { SortableTh, SortState } from "../components/SortableTh";
 import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from "../components/Skeleton";
 
@@ -33,11 +38,21 @@ const PERIODS = [
   { months: 60, label: "5 dernières années" },
 ];
 
+function periodLabel(p: PeriodRange): string {
+  const f = (iso: string) =>
+    new Date(iso).toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  return `${f(p.from)} – ${f(p.to)}`;
+}
+
 type Tab = "visits" | "initiations" | "closures" | "ivsa";
 
 export function Clinique() {
   const [tab, setTab] = useState<Tab>("initiations");
-  const [months, setMonths] = useState(12);
+  const [period, setPeriod] = useState<PeriodRange>(defaultPeriod());
   const [scope, setScope] = useState<GeoScope>({});
 
   // Order follows the patient journey: entrée (initiation) → suivi
@@ -59,15 +74,7 @@ export function Clinique() {
         subtitle="Visites · Initiations ARV · Clôtures · IVSA"
         right={<>
           <GeoFilter value={scope} onChange={setScope} />
-          <select
-            value={months}
-            onChange={(e) => setMonths(Number(e.target.value))}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
-          >
-            {PERIODS.map((p) => (
-              <option key={p.months} value={p.months}>{p.label}</option>
-            ))}
-          </select>
+          <PeriodFilter value={period} presets={PERIODS} onChange={setPeriod} />
         </>} />
 
       {/* Tabs */}
@@ -87,10 +94,10 @@ export function Clinique() {
         ))}
       </div>
 
-      {tab === "visits"      && <VisitsPanel      months={months} scope={scope} />}
-      {tab === "initiations" && <InitiationsPanel months={months} scope={scope} />}
-      {tab === "closures"    && <ClosuresPanel    months={months} scope={scope} />}
-      {tab === "ivsa"        && <IvsaPanel        months={months} scope={scope} />}
+      {tab === "visits"      && <VisitsPanel      period={period} scope={scope} />}
+      {tab === "initiations" && <InitiationsPanel period={period} scope={scope} />}
+      {tab === "closures"    && <ClosuresPanel    period={period} scope={scope} />}
+      {tab === "ivsa"        && <IvsaPanel        period={period} scope={scope} />}
     </div>
   );
 }
@@ -111,19 +118,19 @@ function shortenWho(s: string | null): string {
   return m ? `Stade ${m[1]}` : s;
 }
 
-function VisitsPanel({ months, scope }: { months: number; scope: GeoScope }) {
+function VisitsPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }) {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
   const [exporting, setExporting] = useState(false);
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ["clinic-summary", months, scope],
-    queryFn: () => fetchClinicSummary(months, scope),
+    queryKey: ["clinic-summary", period, scope],
+    queryFn: () => fetchClinicSummary(period, scope),
   });
   const visits = useQuery({
-    queryKey: ["clinic-visits", months, scope, sort, page],
-    queryFn: () => fetchClinicVisits({ months, ...scope, sort, page, size }),
+    queryKey: ["clinic-visits", period, scope, sort, page],
+    queryFn: () => fetchClinicVisits({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -135,7 +142,7 @@ function VisitsPanel({ months, scope }: { months: number; scope: GeoScope }) {
   async function handleExport() {
     setExporting(true);
     try {
-      await downloadClinicCsv(months, scope);
+      await downloadClinicCsv(period, scope);
     } catch (err) {
       /* eslint-disable-next-line no-console */ console.error(err);
     } finally {
@@ -169,7 +176,7 @@ function VisitsPanel({ months, scope }: { months: number; scope: GeoScope }) {
           <Kpi
             label="Visites (période)"
             value={summary.isError ? "Erreur" : formatInt(summary.data?.visitsInPeriod)}
-            hint={`${PERIODS.find((p) => p.months === months)?.label}`}
+            hint={`${periodLabel(period)}`}
             hintTone="neutral"
           />
           <Kpi
@@ -463,19 +470,19 @@ function DistributionCard({
 // =============================================================================
 // Initiations panel — fiche initiale ARV
 // =============================================================================
-function InitiationsPanel({ months, scope }: { months: number; scope: GeoScope }) {
+function InitiationsPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }) {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
   const [exporting, setExporting] = useState(false);
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ["init-summary", months, scope],
-    queryFn: () => fetchInitiationSummary(months, scope),
+    queryKey: ["init-summary", period, scope],
+    queryFn: () => fetchInitiationSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ["init-records", months, scope, sort, page],
-    queryFn: () => fetchInitiationRecords({ months, ...scope, sort, page, size }),
+    queryKey: ["init-records", period, scope, sort, page],
+    queryFn: () => fetchInitiationRecords({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -483,7 +490,7 @@ function InitiationsPanel({ months, scope }: { months: number; scope: GeoScope }
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadInitiationCsv(months, scope); }
+    try { await downloadInitiationCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -506,7 +513,7 @@ function InitiationsPanel({ months, scope }: { months: number; scope: GeoScope }
              hint="Toutes périodes" hintTone="neutral" />
         <Kpi label="Période"
              value={summary.isError ? "Erreur" : formatInt(summary.data?.inPeriod)}
-             hint={PERIODS.find(p => p.months === months)?.label} hintTone="neutral" />
+             hint={periodLabel(period)} hintTone="neutral" />
         <Kpi label="Pédiatriques"
              value={summary.isError ? "Erreur" : formatInt(summary.data?.pediatric)}
              hint="Avec fiche pédiatrique liée" hintTone="positive" />
@@ -615,19 +622,19 @@ function InitiationsPanel({ months, scope }: { months: number; scope: GeoScope }
 // =============================================================================
 // Closures panel — fiche de clôture (sortie de cohorte)
 // =============================================================================
-function ClosuresPanel({ months, scope }: { months: number; scope: GeoScope }) {
+function ClosuresPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }) {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
   const [exporting, setExporting] = useState(false);
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ["closure-summary", months, scope],
-    queryFn: () => fetchClosureSummary(months, scope),
+    queryKey: ["closure-summary", period, scope],
+    queryFn: () => fetchClosureSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ["closure-records", months, scope, sort, page],
-    queryFn: () => fetchClosureRecords({ months, ...scope, sort, page, size }),
+    queryKey: ["closure-records", period, scope, sort, page],
+    queryFn: () => fetchClosureRecords({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -635,7 +642,7 @@ function ClosuresPanel({ months, scope }: { months: number; scope: GeoScope }) {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadClosureCsv(months, scope); }
+    try { await downloadClosureCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -658,7 +665,7 @@ function ClosuresPanel({ months, scope }: { months: number; scope: GeoScope }) {
              hint="Toutes périodes" hintTone="neutral" />
         <Kpi label="Période"
              value={summary.isError ? "Erreur" : formatInt(summary.data?.inPeriod)}
-             hint={PERIODS.find(p => p.months === months)?.label} hintTone="neutral" />
+             hint={periodLabel(period)} hintTone="neutral" />
         <Kpi label="Décès"
              value={summary.isError ? "Erreur" : formatInt(summary.data?.deaths)}
              hint="Clôtures pour décès" hintTone="warning" />
@@ -764,19 +771,19 @@ function ClosuresPanel({ months, scope }: { months: number; scope: GeoScope }) {
 // =============================================================================
 // IVSA panel — visites du sous-module "patient non stable"
 // =============================================================================
-function IvsaPanel({ months, scope }: { months: number; scope: GeoScope }) {
+function IvsaPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }) {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
   const [exporting, setExporting] = useState(false);
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ["ivsa-summary", months, scope],
-    queryFn: () => fetchIvsaSummary(months, scope),
+    queryKey: ["ivsa-summary", period, scope],
+    queryFn: () => fetchIvsaSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ["ivsa-visits", months, scope, sort, page],
-    queryFn: () => fetchIvsaVisits({ months, ...scope, sort, page, size }),
+    queryKey: ["ivsa-visits", period, scope, sort, page],
+    queryFn: () => fetchIvsaVisits({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -784,7 +791,7 @@ function IvsaPanel({ months, scope }: { months: number; scope: GeoScope }) {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadIvsaCsv(months, scope); }
+    try { await downloadIvsaCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -807,7 +814,7 @@ function IvsaPanel({ months, scope }: { months: number; scope: GeoScope }) {
              hint="Toutes périodes" hintTone="neutral" />
         <Kpi label="Période"
              value={summary.isError ? "Erreur" : formatInt(summary.data?.inPeriod)}
-             hint={PERIODS.find(p => p.months === months)?.label} hintTone="neutral" />
+             hint={periodLabel(period)} hintTone="neutral" />
         <Kpi label="Succès confirmés"
              value={summary.isError ? "Erreur" : formatInt(summary.data?.successConfirmed)}
              hint="Date de succès renseignée" hintTone="positive" />

@@ -55,8 +55,9 @@ public class TptService {
         return out;
     }
 
-    public TptSummary summary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public TptSummary summary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         // Cards
@@ -67,14 +68,14 @@ public class TptService {
 
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.tpt_records t" + region
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long completed = jdbc.queryForObject(
                 "SELECT count(*) FROM core.tpt_records t" + region
                         + " WHERE t.voided = FALSE AND t.tpt_outcome IS NOT NULL"
-                        + "   AND t.record_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + "   AND t.record_date >= ? AND t.record_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long ongoing = jdbc.queryForObject(
                 "SELECT count(*) FROM core.tpt_records t" + region
@@ -88,50 +89,50 @@ public class TptService {
                         .multiply(new BigDecimal(100))
                         .divide(new BigDecimal(inPeriod), 1, RoundingMode.HALF_UP);
 
-        // Yearly series (last <months> months bucketed by year)
+        // Yearly series (période from → to bucketed by year)
         List<YearBucket> yearly = jdbc.query(
                 "SELECT EXTRACT(year FROM t.record_date)::int AS yr, count(*) AS n"
                         + " FROM core.tpt_records t" + region
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?"
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?"
                         + " GROUP BY yr ORDER BY yr",
                 (rs, i) -> new YearBucket(rs.getInt("yr"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Outcome distribution
         List<Bucket> outcomes = jdbc.query(
                 "SELECT COALESCE(t.tpt_outcome, '(non clos)') AS k, count(*) AS n"
                         + " FROM core.tpt_records t" + region
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?"
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Adherence distribution
         List<Bucket> adherence = jdbc.query(
                 "SELECT COALESCE(t.adherence, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.tpt_records t" + region
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?"
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Status distribution (Début / En cours / Fin / Pas de TPT)
         List<Bucket> statuses = jdbc.query(
                 "SELECT COALESCE(t.tpt_status, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.tpt_records t" + region
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?"
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Regimen distribution (3HP / 6H / INH / …)
         List<Bucket> regimens = jdbc.query(
                 "SELECT COALESCE(t.tpt_regimen, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.tpt_records t" + region
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?"
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new TptSummary(
                 total == null ? 0L : total,
@@ -144,7 +145,8 @@ public class TptService {
                 adherence,
                 statuses,
                 regimens,
-                months);
+                since,
+                until);
     }
 
     private static final Map<String, String> TPT_SORTABLE = Map.of(
@@ -155,13 +157,14 @@ public class TptService {
             "tptRegimen", "t.tpt_regimen"
     );
 
-    public RecordPage records(int months, Long regionId, Long districtId, Long siteId,
+    public RecordPage records(PeriodRange period, Long regionId, Long districtId, Long siteId,
                               String sort, String dir,
                               int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         // The query already joins core.sites for code/name; tack the geo
         // filter on that join.
@@ -180,11 +183,12 @@ public class TptService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.tpt_records t"
                         + " JOIN core.sites site ON site.id = t.site_id" + geoJoin
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?",
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -202,7 +206,7 @@ public class TptService {
                         + "         ORDER BY pi.id LIMIT 1) AS patient_code"
                         + " FROM core.tpt_records t"
                         + " JOIN core.sites site ON site.id = t.site_id" + geoJoin
-                        + " WHERE t.voided = FALSE AND t.record_date >= ?"
+                        + " WHERE t.voided = FALSE AND t.record_date >= ? AND t.record_date <= ?"
                         + SortSpec.orderBy(sort, dir, TPT_SORTABLE,
                                 "t.record_date DESC NULLS LAST, t.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -242,7 +246,8 @@ public class TptService {
             List<Bucket> adherence,
             List<Bucket> statuses,
             List<Bucket> regimens,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record YearBucket(int year, long count) {}

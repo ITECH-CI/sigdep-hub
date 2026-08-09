@@ -9,10 +9,13 @@ import ci.itechciv.sigdep.hub.domain.service.ClinicService.IvsaRow;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService.IvsaSummary;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService.VisitPage;
 import ci.itechciv.sigdep.hub.domain.service.ClinicService.VisitRow;
+import ci.itechciv.sigdep.hub.domain.service.PeriodRange;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,18 +37,21 @@ public class ClinicController {
 
     @GetMapping("/summary")
     public ClinicSummary summary(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.summary(Math.max(1, Math.min(120, months)),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.summary(period,
                 s.regionId(), s.districtId(), s.siteId());
     }
 
     @GetMapping("/visits")
     public VisitPage visits(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
@@ -54,24 +60,26 @@ public class ClinicController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.visits(Math.max(1, Math.min(120, months)),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.visits(period,
                 s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
     }
 
     @GetMapping(value = "/visits.csv", produces = "text/csv;charset=UTF-8")
     public void visitsCsv(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
             HttpServletResponse response) throws IOException {
 
-        int safeMonths = Math.max(1, Math.min(120, months));
+        PeriodRange period = PeriodRange.resolve(from, to);
         Scope s = authScope.effective(regionId, districtId, siteId);
-        VisitPage page = service.visits(safeMonths, s.regionId(), s.districtId(), s.siteId(),
+        VisitPage page = service.visits(period, s.regionId(), s.districtId(), s.siteId(),
                 null, null, 0, 5000);
 
-        String filename = "clinique-" + safeMonths + "m.csv";
+        String filename = "clinique-" + period.from() + "_" + period.to() + ".csv";
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
@@ -107,18 +115,21 @@ public class ClinicController {
 
     @GetMapping("/ivsa/summary")
     public IvsaSummary ivsaSummary(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.ivsaSummary(Math.max(1, Math.min(120, months)),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.ivsaSummary(period,
                 s.regionId(), s.districtId(), s.siteId());
     }
 
     @GetMapping("/ivsa/visits")
     public IvsaPage ivsaVisits(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
@@ -127,27 +138,29 @@ public class ClinicController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Scope s = authScope.effective(regionId, districtId, siteId);
-        return service.ivsaVisits(Math.max(1, Math.min(120, months)),
+        PeriodRange period = PeriodRange.resolve(from, to);
+        return service.ivsaVisits(period,
                 s.regionId(), s.districtId(), s.siteId(), sort, dir, page, size);
     }
 
     @GetMapping(value = "/ivsa/visits.csv", produces = "text/csv;charset=UTF-8")
     public void ivsaVisitsCsv(
-            @RequestParam(defaultValue = "12") int months,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long regionId,
             @RequestParam(required = false) Long districtId,
             @RequestParam(required = false) Long siteId,
             HttpServletResponse response) throws IOException {
 
-        int safeMonths = Math.max(1, Math.min(120, months));
+        PeriodRange period = PeriodRange.resolve(from, to);
         Scope s = authScope.effective(regionId, districtId, siteId);
-        IvsaPage page = service.ivsaVisits(safeMonths,
+        IvsaPage page = service.ivsaVisits(period,
                 s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
 
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"ivsa-" + safeMonths + "m.csv\"");
+                "attachment; filename=\"ivsa-" + period.from() + "_" + period.to() + ".csv\"");
 
         DateTimeFormatter df = DateTimeFormatter.ISO_LOCAL_DATE;
         try (PrintWriter w = response.getWriter()) {

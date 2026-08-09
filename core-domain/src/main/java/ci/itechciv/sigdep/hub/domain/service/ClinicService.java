@@ -59,8 +59,9 @@ public class ClinicService {
         return out;
     }
 
-    public ClinicSummary summary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public ClinicSummary summary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         Long visitsTotal = jdbc.queryForObject(
@@ -70,20 +71,20 @@ public class ClinicService {
 
         Long visitsInPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long withTbScreen = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.extra_data ?? ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since, TB_SCREEN_KEY));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until, TB_SCREEN_KEY));
 
         Long withWhoStage = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.extra_data ?? ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since, WHO_STAGE_KEY));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until, WHO_STAGE_KEY));
 
         BigDecimal tbScreenPct = pct(withTbScreen, visitsInPeriod);
         BigDecimal whoStagePct = pct(withWhoStage, visitsInPeriod);
@@ -95,28 +96,28 @@ public class ClinicService {
         List<Bucket> whoStageDist = jdbc.query(
                 "SELECT v.extra_data->>'" + WHO_STAGE_KEY + "' AS k, count(*) AS n"
                         + " FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.extra_data ?? '" + WHO_STAGE_KEY + "'"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> tbScreenDist = jdbc.query(
                 "SELECT v.extra_data->>'" + TB_SCREEN_KEY + "' AS k, count(*) AS n"
                         + " FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.extra_data ?? '" + TB_SCREEN_KEY + "'"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         List<Bucket> arvDist = jdbc.query(
                 "SELECT v.arv_regimen AS k, count(*) AS n FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.arv_regimen IS NOT NULL"
                         + " GROUP BY k ORDER BY n DESC LIMIT 10",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Monthly volumes for the Visites tab. Three series per month:
         //  - n_visits     : every clinical visit
@@ -132,8 +133,8 @@ public class ClinicService {
         //                   venus pour repérer les perdus de vue précoces.
         String monthlySql = "WITH months AS ("
                 + " SELECT generate_series("
-                + "   date_trunc('month', NOW()) - make_interval(months => ? - 1),"
-                + "   date_trunc('month', NOW()),"
+                + "   date_trunc('month', ?::date),"
+                + "   date_trunc('month', ?::date),"
                 + "   INTERVAL '1 month'"
                 + " )::date AS month_start"
                 + ") SELECT to_char(m.month_start, 'YYYY-MM') AS label,"
@@ -154,7 +155,8 @@ public class ClinicService {
 
         Long g = geoArg(regionId, districtId, siteId);
         List<Object> mArgs = new ArrayList<>();
-        mArgs.add(months);
+        mArgs.add(period.from());
+        mArgs.add(period.to());
         if (g != null) mArgs.add(g);            // visits sub-query
         if (g != null) mArgs.add(g);            // dispensations sub-query (sur visits)
         if (g != null) mArgs.add(g);            // expected (visits.next_visit_date) sub-query
@@ -178,7 +180,8 @@ public class ClinicService {
                 whoStageDist,
                 tbScreenDist,
                 arvDist,
-                months);
+                since,
+                until);
     }
 
     private static BigDecimal pct(Long n, Long d) {
@@ -196,13 +199,14 @@ public class ClinicService {
             "arvRegimen", "v.arv_regimen"
     );
 
-    public VisitPage visits(int months, Long regionId, Long districtId, Long siteId,
+    public VisitPage visits(PeriodRange period, Long regionId, Long districtId, Long siteId,
                             String sort, String dir,
                             int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         // We already JOIN core.sites for the site code/name; piggy-back the
         // geo filter on that join when possible.
@@ -221,11 +225,12 @@ public class ClinicService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v"
                         + " JOIN core.sites site ON site.id = v.site_id" + geoJoin
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?",
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -247,7 +252,7 @@ public class ClinicService {
                         + "         ORDER BY pi.id LIMIT 1) AS patient_code"
                         + " FROM core.visits v"
                         + " JOIN core.sites site ON site.id = v.site_id" + geoJoin
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + SortSpec.orderBy(sort, dir, VISIT_SORTABLE,
                                 "v.visit_date DESC NULLS LAST, v.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -293,8 +298,9 @@ public class ClinicService {
     // distinct tab without forking another module.
     // ---------------------------------------------------------------------
 
-    public IvsaSummary ivsaSummary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public IvsaSummary ivsaSummary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         Long total = jdbc.queryForObject(
@@ -305,33 +311,34 @@ public class ClinicService {
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.ivsa_msd_code = 'IVSA'"
-                        + "   AND v.visit_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long success = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.ivsa_msd_code = 'IVSA'"
                         + "   AND v.ivsa_success_confirmation_date IS NOT NULL"
-                        + "   AND v.ivsa_success_confirmation_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + "   AND v.ivsa_success_confirmation_date >= ?"
+                        + "   AND v.ivsa_success_confirmation_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long withAlertSigns = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.ivsa_msd_code = 'IVSA'"
-                        + "   AND v.visit_date >= ?"
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND COALESCE(v.ivsa_alert_signs_count, 0) > 0",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         BigDecimal successPct = pct(success, inPeriod);
 
         List<Bucket> msd = jdbc.query(
                 "SELECT COALESCE(v.ivsa_msd_code, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.visits v" + region
-                        + " WHERE v.voided = FALSE AND v.visit_date >= ?"
+                        + " WHERE v.voided = FALSE AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.ivsa_msd_code IS NOT NULL"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         return new IvsaSummary(
                 total == null ? 0L : total,
@@ -340,7 +347,8 @@ public class ClinicService {
                 withAlertSigns == null ? 0L : withAlertSigns,
                 successPct,
                 msd,
-                months);
+                since,
+                until);
     }
 
     private static final Map<String, String> IVSA_SORTABLE = Map.of(
@@ -351,12 +359,13 @@ public class ClinicService {
             "neuro",   "v.ivsa_neuro_signs_count"
     );
 
-    public IvsaPage ivsaVisits(int months, Long regionId, Long districtId, Long siteId,
+    public IvsaPage ivsaVisits(PeriodRange period, Long regionId, Long districtId, Long siteId,
                                String sort, String dir, int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         String geoJoin;
         if (siteId != null)          geoJoin = " AND site.id = ?";
@@ -368,12 +377,13 @@ public class ClinicService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v"
                         + " JOIN core.sites site ON site.id = v.site_id" + geoJoin
                         + " WHERE v.voided = FALSE AND v.ivsa_msd_code = 'IVSA'"
-                        + "   AND v.visit_date >= ?",
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -393,7 +403,7 @@ public class ClinicService {
                         + " FROM core.visits v"
                         + " JOIN core.sites site ON site.id = v.site_id" + geoJoin
                         + " WHERE v.voided = FALSE AND v.ivsa_msd_code = 'IVSA'"
-                        + "   AND v.visit_date >= ?"
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?"
                         + SortSpec.orderBy(sort, dir, IVSA_SORTABLE,
                                 "v.visit_date DESC NULLS LAST, v.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -430,7 +440,8 @@ public class ClinicService {
             long withAlertSigns,
             BigDecimal successPct,
             List<Bucket> msdDistribution,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record IvsaRow(
@@ -467,7 +478,8 @@ public class ClinicService {
             List<Bucket> whoStageDistribution,
             List<Bucket> tbScreeningDistribution,
             List<Bucket> arvRegimenDistribution,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     /**

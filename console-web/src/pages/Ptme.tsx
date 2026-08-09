@@ -12,6 +12,7 @@ import {
 import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
+import { PeriodFilter, PeriodRange, defaultPeriod } from '../components/PeriodFilter';
 import { SortableTh, SortState } from '../components/SortableTh';
 import { ChartSkeleton, KpiRowSkeleton, TableSkeleton } from '../components/Skeleton';
 
@@ -30,6 +31,10 @@ function formatDate(iso: string | null): string {
     { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function periodLabel(p: PeriodRange): string {
+  return `${formatDate(p.from)} – ${formatDate(p.to)}`;
+}
+
 function resultBadge(r: string | null) {
   if (r === 'POS') return <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-50 text-rose-700">POS</span>;
   if (r === 'NEG') return <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700">NEG</span>;
@@ -39,7 +44,7 @@ function resultBadge(r: string | null) {
 
 export function Ptme() {
   const [tab, setTab] = useState<Tab>('mother');
-  const [months, setMonths] = useState(60);
+  const [period, setPeriod] = useState<PeriodRange>(defaultPeriod());
   const [scope, setScope] = useState<GeoScope>({});
 
   return (
@@ -50,14 +55,7 @@ export function Ptme() {
         subtitle="Prévention de la Transmission Mère-Enfant"
         right={<>
           <GeoFilter value={scope} onChange={setScope} />
-          <select
-            value={months}
-            onChange={e => setMonths(Number(e.target.value))}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white">
-            {PERIODS.map(p => (
-              <option key={p.months} value={p.months}>{p.label}</option>
-            ))}
-          </select>
+          <PeriodFilter value={period} presets={PERIODS} onChange={setPeriod} />
         </>} />
 
       {/* Tabs */}
@@ -85,25 +83,25 @@ export function Ptme() {
       </div>
 
       {tab === 'mother'
-        ? <MotherPanel months={months} scope={scope} />
-        : <ChildPanel months={months} scope={scope} />}
+        ? <MotherPanel period={period} scope={scope} />
+        : <ChildPanel period={period} scope={scope} />}
     </div>
   );
 }
 
-function MotherPanel({ months, scope }: { months: number; scope: GeoScope }) {
+function MotherPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }) {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
   const [exporting, setExporting] = useState(false);
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ['ptme-mother-summary', months, scope],
-    queryFn: () => fetchPtmeMotherSummary(months, scope),
+    queryKey: ['ptme-mother-summary', period, scope],
+    queryFn: () => fetchPtmeMotherSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ['ptme-mother-records', months, scope, sort, page],
-    queryFn: () => fetchPtmeMotherRecords({ months, ...scope, sort, page, size }),
+    queryKey: ['ptme-mother-records', period, scope, sort, page],
+    queryFn: () => fetchPtmeMotherRecords({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -111,7 +109,7 @@ function MotherPanel({ months, scope }: { months: number; scope: GeoScope }) {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadPtmeMotherCsv(months, scope); }
+    try { await downloadPtmeMotherCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -136,7 +134,7 @@ function MotherPanel({ months, scope }: { months: number; scope: GeoScope }) {
              hintTone="neutral" />
         <Kpi label="Suivies (période)"
              value={summary.isError ? 'Erreur' : formatInt(summary.data?.inPeriod)}
-             hint={PERIODS.find(p => p.months === months)?.label}
+             hint={periodLabel(period)}
              hintTone="neutral" />
         <Kpi label="Conjoints positifs"
              value={summary.isError ? 'Erreur' : formatInt(summary.data?.spousalPositive)}
@@ -243,19 +241,19 @@ function MotherPanel({ months, scope }: { months: number; scope: GeoScope }) {
   </>;
 }
 
-function ChildPanel({ months, scope }: { months: number; scope: GeoScope }) {
+function ChildPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }) {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(0);
   const [exporting, setExporting] = useState(false);
   const size = 50;
 
   const summary = useQuery({
-    queryKey: ['ptme-child-summary', months, scope],
-    queryFn: () => fetchPtmeChildSummary(months, scope),
+    queryKey: ['ptme-child-summary', period, scope],
+    queryFn: () => fetchPtmeChildSummary(period, scope),
   });
   const records = useQuery({
-    queryKey: ['ptme-child-records', months, scope, sort, page],
-    queryFn: () => fetchPtmeChildRecords({ months, ...scope, sort, page, size }),
+    queryKey: ['ptme-child-records', period, scope, sort, page],
+    queryFn: () => fetchPtmeChildRecords({ period, ...scope, sort, page, size }),
   });
 
   const onSort = (s: SortState) => { setSort(s); setPage(0); };
@@ -263,7 +261,7 @@ function ChildPanel({ months, scope }: { months: number; scope: GeoScope }) {
 
   async function handleExport() {
     setExporting(true);
-    try { await downloadPtmeChildCsv(months, scope); }
+    try { await downloadPtmeChildCsv(period, scope); }
     catch (err) { /* eslint-disable-next-line no-console */ console.error(err); }
     finally { setExporting(false); }
   }
@@ -288,7 +286,7 @@ function ChildPanel({ months, scope }: { months: number; scope: GeoScope }) {
              hintTone="neutral" />
         <Kpi label="Nés (période)"
              value={summary.isError ? 'Erreur' : formatInt(summary.data?.inPeriod)}
-             hint={PERIODS.find(p => p.months === months)?.label}
+             hint={periodLabel(period)}
              hintTone="neutral" />
         <Kpi label="Positifs"
              value={summary.isError ? 'Erreur' : formatInt(summary.data?.anyPositive)}

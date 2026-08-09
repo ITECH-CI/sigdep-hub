@@ -52,8 +52,9 @@ public class PharmacyService {
         return out;
     }
 
-    public PharmacySummary summary(int months, Long regionId, Long districtId, Long siteId) {
-        LocalDate since = LocalDate.now().minusMonths(months);
+    public PharmacySummary summary(PeriodRange period, Long regionId, Long districtId, Long siteId) {
+        LocalDate since = period.from();
+        LocalDate until = period.to();
         String region = geoFilter(regionId, districtId, siteId);
 
         Long dispensationsTotal = jdbc.queryForObject(
@@ -64,37 +65,37 @@ public class PharmacyService {
         Long dispensationsInPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         // Distinct patients on ARV in period (file active "pharmacie")
         Long patientsOnArv = jdbc.queryForObject(
                 "SELECT count(DISTINCT v.patient_id) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long distinctRegimens = jdbc.queryForObject(
                 "SELECT count(DISTINCT v.arv_regimen) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         // % short dispensations (<30 days) — proxy for non-MMD
         Long shortCount = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?"
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.arv_treatment_days IS NOT NULL"
                         + "   AND v.arv_treatment_days < 30",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long withDuration = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?"
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?"
                         + "   AND v.arv_treatment_days IS NOT NULL",
-                Long.class, geoArgs(regionId, districtId, siteId, since));
+                Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         BigDecimal shortPct = pct(shortCount, withDuration);
 
@@ -103,10 +104,10 @@ public class PharmacyService {
                 "SELECT v.arv_regimen AS k, count(*) AS n, count(DISTINCT v.patient_id) AS p"
                         + " FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?"
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?"
                         + " GROUP BY v.arv_regimen ORDER BY n DESC LIMIT 15",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n"), rs.getLong("p")),
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
         // Duration distribution (4 buckets)
         DurationBuckets durations = jdbc.query(
@@ -119,7 +120,7 @@ public class PharmacyService {
                         + "  count(*)                                                       AS total"
                         + " FROM core.visits v" + region
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?",
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
                 rs -> {
                     if (!rs.next()) return new DurationBuckets(0, 0, 0, 0, 0, 0);
                     return new DurationBuckets(
@@ -127,13 +128,13 @@ public class PharmacyService {
                             rs.getLong("b3"), rs.getLong("b4"),
                             rs.getLong("bn"), rs.getLong("total"));
                 },
-                geoArgs(regionId, districtId, siteId, since));
+                geoArgs(regionId, districtId, siteId, since, until));
 
-        // Monthly volume
+        // Monthly volume — l'axe des mois couvre du mois de `from` au mois de `to` (inclus)
         String monthlySql = "WITH months AS ("
                 + " SELECT generate_series("
-                + "   date_trunc('month', NOW()) - make_interval(months => ? - 1),"
-                + "   date_trunc('month', NOW()),"
+                + "   date_trunc('month', ?::date),"
+                + "   date_trunc('month', ?::date),"
                 + "   INTERVAL '1 month'"
                 + " )::date AS month_start"
                 + ") SELECT to_char(m.month_start, 'YYYY-MM') AS label,"
@@ -145,7 +146,8 @@ public class PharmacyService {
 
         Long g = geoArg(regionId, districtId, siteId);
         List<Object> mArgs = new ArrayList<>();
-        mArgs.add(months);
+        mArgs.add(period.from());
+        mArgs.add(period.to());
         if (g != null) mArgs.add(g);
 
         List<MonthlyCount> monthly = jdbc.query(monthlySql,
@@ -161,7 +163,8 @@ public class PharmacyService {
                 monthly,
                 regimens,
                 durations,
-                months);
+                since,
+                until);
     }
 
     private static BigDecimal pct(Long n, Long d) {
@@ -178,13 +181,14 @@ public class PharmacyService {
             "arvDays",    "v.arv_treatment_days"
     );
 
-    public DispensationPage dispensations(int months, Long regionId, Long districtId, Long siteId,
+    public DispensationPage dispensations(PeriodRange period, Long regionId, Long districtId, Long siteId,
                                           String sort, String dir,
                                           int page, int size) {
         int safeSize = Math.max(1, Math.min(500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
-        LocalDate since = LocalDate.now().minusMonths(months);
+        LocalDate since = period.from();
+        LocalDate until = period.to();
 
         // The list query already joins core.sites for code/name, so we
         // tack the geo filter on that join when possible.
@@ -203,12 +207,13 @@ public class PharmacyService {
         Long g = geoArg(regionId, districtId, siteId);
         if (g != null) args.add(g);
         args.add(since);
+        args.add(until);
 
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.visits v"
                         + " JOIN core.sites site ON site.id = v.site_id" + geoJoin
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?",
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -227,7 +232,7 @@ public class PharmacyService {
                         + " FROM core.visits v"
                         + " JOIN core.sites site ON site.id = v.site_id" + geoJoin
                         + " WHERE v.voided = FALSE AND v.arv_regimen IS NOT NULL"
-                        + "   AND v.visit_date >= ?"
+                        + "   AND v.visit_date >= ? AND v.visit_date <= ?"
                         + SortSpec.orderBy(sort, dir, DISPENSATION_SORTABLE,
                                 "v.visit_date DESC NULLS LAST, v.id DESC")
                         + " LIMIT ? OFFSET ?",
@@ -262,7 +267,8 @@ public class PharmacyService {
             List<MonthlyCount> monthly,
             List<Bucket> regimens,
             DurationBuckets durations,
-            int periodMonths
+            LocalDate periodFrom,
+            LocalDate periodTo
     ) {}
 
     public record MonthlyCount(String month, long count) {}
