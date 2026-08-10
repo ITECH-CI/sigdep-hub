@@ -61,7 +61,8 @@ export function Login() {
           {/* Colonne gauche : pitch */}
           <div className="hidden md:block">
             <h1 className="text-3xl font-semibold tracking-tight text-ink leading-snug">
-              Serveur consolidé de suivi des patients vivant avec le VIH
+              Base de Données Centrale Consolidée des patients vivant avec le
+              VIH en Côte d’Ivoire
             </h1>
             <p className="mt-4 text-ink-muted leading-relaxed">
               Plateforme nationale SIGDEP-3 — indicateurs, file active, suivi
