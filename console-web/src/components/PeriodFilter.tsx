@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 export type PeriodRange = {
   /** Borne de début incluse, ISO yyyy-MM-dd. */
   from: string;
@@ -53,13 +55,31 @@ export function PeriodFilter({
   onChange: (next: PeriodRange) => void;
   presets: PeriodPreset[];
 }>) {
-  // Un preset est « actif » si value == exactement son range (mois glissants
-  // finissant aujourd'hui). Sinon on est en mode personnalisé.
+  // Les champs date modifient un brouillon LOCAL ; la requête (onChange) ne part
+  // qu'au clic « Appliquer » (ou touche Entrée), pour ne pas relancer une
+  // requête à chaque caractère saisi. Les presets, eux, s'appliquent tout de
+  // suite (ce sont des raccourcis, pas une saisie à valider).
+  const [draft, setDraft] = useState<PeriodRange>(value);
+
+  // Resynchronise le brouillon quand la période effective change ailleurs
+  // (choix d'un preset, reset…), pour que les champs reflètent l'état courant.
+  useEffect(() => {
+    setDraft(value);
+  }, [value.from, value.to]);
+
   const today = todayIso();
   const activeMonths = presets.find((p) => {
     const r = monthsToRange(p.months);
     return r.from === value.from && r.to === value.to && value.to === today;
   })?.months;
+
+  // Y a-t-il une modification de date non encore appliquée ?
+  const dirty = draft.from !== value.from || draft.to !== value.to;
+  const validRange = !!draft.from && !!draft.to && draft.from <= draft.to;
+
+  const apply = () => {
+    if (dirty && validRange) onChange(draft);
+  };
 
   return (
     <>
@@ -67,7 +87,7 @@ export function PeriodFilter({
         value={activeMonths ?? ""}
         onChange={(e) => {
           const m = Number(e.target.value);
-          if (m) onChange(monthsToRange(m));
+          if (m) onChange(monthsToRange(m)); // preset : applique immédiatement
         }}
         className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
         aria-label="Période prédéfinie"
@@ -86,21 +106,33 @@ export function PeriodFilter({
 
       <input
         type="date"
-        value={value.from}
-        max={value.to || undefined}
-        onChange={(e) => onChange({ from: e.target.value, to: value.to })}
+        value={draft.from}
+        max={draft.to || undefined}
+        onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
+        onKeyDown={(e) => e.key === "Enter" && apply()}
         className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
         aria-label="Date de début"
       />
       <span className="text-slate-400 text-sm self-center">→</span>
       <input
         type="date"
-        value={value.to}
-        min={value.from || undefined}
-        onChange={(e) => onChange({ from: value.from, to: e.target.value })}
+        value={draft.to}
+        min={draft.from || undefined}
+        onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
+        onKeyDown={(e) => e.key === "Enter" && apply()}
         className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
         aria-label="Date de fin"
       />
+      <button
+        type="button"
+        onClick={apply}
+        disabled={!dirty || !validRange}
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm bg-white
+                   hover:bg-slate-50 disabled:opacity-40 disabled:cursor-default transition"
+        aria-label="Appliquer la période"
+      >
+        Appliquer
+      </button>
     </>
   );
 }

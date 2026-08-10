@@ -7,6 +7,28 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.9] — 2026-08-10
+
+### Corrigé
+
+- **Initiations à `arv_init_date` NULL invisibles dans les vues « par période »**
+  (problème préexistant, révélé par le nouveau filtre de dates). Sur le hub de
+  prod, ~64 % des initiations ont une date ARV vide : elles étaient comptées dans
+  le cumul « toutes périodes » mais **exclues** dès qu'un filtre de période
+  s'appliquait (`arv_init_date >= ?` élimine les NULL). Ces lignes ont toutes une
+  `enrollment_date` renseignée : les requêtes d'initiation bornent désormais sur
+  `COALESCE(arv_init_date, enrollment_date)` (KPI période, graphe annuel, liste,
+  distributions). Sur prod : le compte « période » sur une plage large passe de
+  ~7 000 à ~19 570 (≈ cumul).
+
+### Modifié
+
+- **Filtre de période : bouton « Appliquer »**. Les champs date début/fin
+  modifient désormais un état local et ne déclenchent la requête qu'au clic sur
+  « Appliquer » (ou touche Entrée), au lieu d'une requête à **chaque caractère
+  saisi** — inutilement coûteux sur les gros volumes. Les raccourcis « N derniers
+  mois », eux, s'appliquent immédiatement.
+
 ## [2.1.8] — 2026-08-09
 
 ### Ajouté
