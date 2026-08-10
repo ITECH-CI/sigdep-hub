@@ -18,9 +18,6 @@ public record PeriodRange(LocalDate from, LocalDate to) {
     /** Défaut historique : 12 mois glissants finissant aujourd'hui. */
     private static final int DEFAULT_MONTHS = 12;
 
-    /** Garde-fou : on ne remonte pas au-delà de 10 ans en arrière. */
-    private static final int MAX_YEARS_BACK = 10;
-
     public PeriodRange {
         if (from == null || to == null) {
             throw new IllegalArgumentException("from et to sont requis");
@@ -37,9 +34,13 @@ public record PeriodRange(LocalDate from, LocalDate to) {
      *   <li>les deux absentes → 12 mois glissants finissant aujourd'hui ;</li>
      *   <li>seul {@code to} absent → to = aujourd'hui ;</li>
      *   <li>seul {@code from} absent → from = to − 12 mois ;</li>
-     *   <li>{@code from > to} → échange (tolérant à une saisie inversée) ;</li>
-     *   <li>{@code from} trop ancien → clampé à aujourd'hui − 10 ans.</li>
+     *   <li>{@code from > to} → échange (tolérant à une saisie inversée).</li>
      * </ul>
+     *
+     * <p>Aucun « plancher » n'est appliqué à {@code from} : une date de début
+     * choisie explicitement par l'utilisateur (même très ancienne, ex. 2000)
+     * doit être respectée telle quelle. Les données remontent à ~2004 et une
+     * borne large ne coûte rien (comparaison indexée).</p>
      */
     public static PeriodRange resolve(LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now();
@@ -50,10 +51,6 @@ public record PeriodRange(LocalDate from, LocalDate to) {
             LocalDate tmp = start;
             start = end;
             end = tmp;
-        }
-        LocalDate floor = today.minusYears(MAX_YEARS_BACK);
-        if (start.isBefore(floor)) {
-            start = floor;
         }
         return new PeriodRange(start, end);
     }

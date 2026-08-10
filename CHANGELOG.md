@@ -7,6 +7,19 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.10] — 2026-08-10
+
+### Corrigé
+
+- **Filtre de période : une date de début antérieure à 10 ans était
+  silencieusement ramenée à aujourd'hui − 10 ans.** `PeriodRange.resolve`
+  appliquait un « plancher » (`from` clampé à `now − 10 ans`) : choisir
+  `01/01/2000` interrogeait en réalité depuis 2016, masquant toutes les données
+  antérieures (constaté : 6 682 initiations affichées au lieu de ~19 570 sur une
+  plage 2000→2026). Le plancher est supprimé — une date de début choisie
+  explicitement est respectée telle quelle (les données remontent à ~2004, une
+  borne large ne coûte rien).
+
 ## [2.1.9] — 2026-08-10
 
 ### Corrigé

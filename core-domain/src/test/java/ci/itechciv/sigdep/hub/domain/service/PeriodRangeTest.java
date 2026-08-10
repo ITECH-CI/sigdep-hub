@@ -47,11 +47,12 @@ class PeriodRangeTest {
     }
 
     @Test
-    @DisplayName("from trop ancien → clampé à aujourd'hui − 10 ans")
-    void tooOldFrom_clampedToFloor() {
-        LocalDate ancient = LocalDate.now().minusYears(50);
-        PeriodRange p = PeriodRange.resolve(ancient, LocalDate.now());
-        assertEquals(LocalDate.now().minusYears(10), p.from());
+    @DisplayName("from ancien choisi explicitement → conservé tel quel (pas de plancher)")
+    void oldExplicitFrom_isKept() {
+        LocalDate old = LocalDate.of(2000, 1, 1);
+        PeriodRange p = PeriodRange.resolve(old, LocalDate.of(2026, 8, 10));
+        assertEquals(old, p.from());
+        assertEquals(LocalDate.of(2026, 8, 10), p.to());
     }
 
     @Test
