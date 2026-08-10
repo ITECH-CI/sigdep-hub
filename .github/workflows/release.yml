@@ -201,6 +201,9 @@ jobs:
           # (Dockerfile + superset_config.py) référencés par le compose.
           cp -r infra/postgres             "deploy-build/$PKG/postgres"
           cp -r infra/superset             "deploy-build/$PKG/superset"
+          # Scripts d'exploitation (backup-hub.sh, reset-hub.sh) + leur README :
+          # l'admin doit les avoir sur le serveur pour planifier les sauvegardes.
+          cp -r infra/scripts              "deploy-build/$PKG/scripts"
 
           # Pin the image tags of this release inside the bundled .env.example
           # so a site admin only has to fill in secrets, not version numbers.
