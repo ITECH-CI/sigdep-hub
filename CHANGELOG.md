@@ -7,6 +7,24 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.11] — 2026-08-10
+
+### Corrigé
+
+- **Export CSV tronqué à 500 lignes.** Les endpoints CSV demandaient 5 000
+  lignes, mais les services clampaient toute requête à `min(500, size)` (plafond
+  pensé pour la pagination interactive) — l'export ne contenait donc jamais plus
+  de **500 lignes**, quelle que soit la catégorie. Le clamp distingue désormais
+  la pagination interactive (plafond 500) de l'export (plafond **100 000**) :
+  un export ramène toute la période. Appliqué à Biologie, Clinique (visites +
+  IVSA), Clôtures, Initiations, Pharmacie, PTME (mère + enfant), Dépistage, TPT
+  et la liste Patients.
+
+  > Note : `lab_results` (~1,08 M lignes) et `visits` (~325 k) dépassent le
+  > plafond 100 000 — les exporter par découpage (zone géo / plage de dates).
+  > Penser à régler une plage de dates large **avant** d'exporter pour tout
+  > obtenir (l'export suit la période active).
+
 ## [2.1.10] — 2026-08-10
 
 ### Corrigé

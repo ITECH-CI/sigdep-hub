@@ -77,7 +77,7 @@ public class ClinicController {
         PeriodRange period = PeriodRange.resolve(from, to);
         Scope s = authScope.effective(regionId, districtId, siteId);
         VisitPage page = service.visits(period, s.regionId(), s.districtId(), s.siteId(),
-                null, null, 0, 5000);
+                null, null, 0, 100_000);
 
         String filename = "clinique-" + period.from() + "_" + period.to() + ".csv";
         response.setContentType("text/csv;charset=UTF-8");
@@ -155,7 +155,7 @@ public class ClinicController {
         PeriodRange period = PeriodRange.resolve(from, to);
         Scope s = authScope.effective(regionId, districtId, siteId);
         IvsaPage page = service.ivsaVisits(period,
-                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
+                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 100_000);
 
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");

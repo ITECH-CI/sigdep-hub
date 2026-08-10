@@ -73,7 +73,7 @@ public class ClosureController {
         Scope s = authScope.effective(regionId, districtId, siteId);
         PeriodRange period = PeriodRange.resolve(from, to);
         RecordPage page = service.records(period,
-                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
+                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 100_000);
 
         response.setContentType("text/csv;charset=UTF-8");
         response.setCharacterEncoding("UTF-8");

@@ -132,7 +132,7 @@ public class PtmeService {
 
     public MotherPage motherRecords(PeriodRange period, Long regionId, Long districtId, Long siteId,
                                     String sort, String dir, int page, int size) {
-        int safeSize = Math.max(1, Math.min(500, size));
+        int safeSize = Math.max(1, Math.min(size > 500 ? 100_000 : 500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
         LocalDate since = period.from();
@@ -276,7 +276,7 @@ public class PtmeService {
 
     public ChildPage childRecords(PeriodRange period, Long regionId, Long districtId, Long siteId,
                                   String sort, String dir, int page, int size) {
-        int safeSize = Math.max(1, Math.min(500, size));
+        int safeSize = Math.max(1, Math.min(size > 500 ? 100_000 : 500, size));
         int safePage = Math.max(0, page);
         int offset = safePage * safeSize;
         LocalDate since = period.from();
