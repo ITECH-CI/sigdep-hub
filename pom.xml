@@ -32,7 +32,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Version du projet (surchargée par -Drevision=<tag> en CI). En dev,
              refléter la prochaine release pour un footer/actuator cohérent. -->
-        <revision>2.1.8-SNAPSHOT</revision>
+        <revision>2.1.9-SNAPSHOT</revision>
 
         <sigdep-contracts.version>0.1.0-SNAPSHOT</sigdep-contracts.version>
         <liquibase.version>4.29.2</liquibase.version>

@@ -67,14 +67,14 @@ public class InitiationService {
 
         Long inPeriod = jdbc.queryForObject(
                 "SELECT count(*) FROM core.treatment_initiations i" + region
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?",
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?",
                 Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         Long pediatric = jdbc.queryForObject(
                 "SELECT count(*) FROM core.treatment_initiations i"
                         + " JOIN core.treatment_initiations_pediatric p ON p.initiation_id = i.id"
                         + (region.isEmpty() ? "" : region)
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?",
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?",
                 Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
         // 'referred' is a free-form coded label coming from the upstream
@@ -82,7 +82,7 @@ public class InitiationService {
         // a boolean equality.
         Long referred = jdbc.queryForObject(
                 "SELECT count(*) FROM core.treatment_initiations i" + region
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?"
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?"
                         + "   AND lower(coalesce(i.referred, '')) IN ('oui', 'yes', 'true', '1')",
                 Long.class, geoArgs(regionId, districtId, siteId, since, until));
 
@@ -92,9 +92,9 @@ public class InitiationService {
                         .divide(new BigDecimal(inPeriod), 1, RoundingMode.HALF_UP);
 
         List<YearBucket> yearly = jdbc.query(
-                "SELECT EXTRACT(year FROM i.arv_init_date)::int AS yr, count(*) AS n"
+                "SELECT EXTRACT(year FROM COALESCE(i.arv_init_date, i.enrollment_date))::int AS yr, count(*) AS n"
                         + " FROM core.treatment_initiations i" + region
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?"
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?"
                         + " GROUP BY yr ORDER BY yr",
                 (rs, i) -> new YearBucket(rs.getInt("yr"), rs.getLong("n")),
                 geoArgs(regionId, districtId, siteId, since, until));
@@ -102,7 +102,7 @@ public class InitiationService {
         List<Bucket> entryPoints = jdbc.query(
                 "SELECT COALESCE(i.entry_point, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.treatment_initiations i" + region
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?"
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?"
                         + " GROUP BY k ORDER BY n DESC LIMIT 15",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
                 geoArgs(regionId, districtId, siteId, since, until));
@@ -110,7 +110,7 @@ public class InitiationService {
         List<Bucket> regimens = jdbc.query(
                 "SELECT COALESCE(i.arv_regimen_initial, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.treatment_initiations i" + region
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?"
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?"
                         + " GROUP BY k ORDER BY n DESC LIMIT 10",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
                 geoArgs(regionId, districtId, siteId, since, until));
@@ -118,7 +118,7 @@ public class InitiationService {
         List<Bucket> whoStages = jdbc.query(
                 "SELECT COALESCE(i.who_stage_initial, '(non renseigné)') AS k, count(*) AS n"
                         + " FROM core.treatment_initiations i" + region
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?"
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?"
                         + " GROUP BY k ORDER BY n DESC",
                 (rs, i) -> new Bucket(rs.getString("k"), rs.getLong("n")),
                 geoArgs(regionId, districtId, siteId, since, until));
@@ -163,7 +163,7 @@ public class InitiationService {
         Long total = jdbc.queryForObject(
                 "SELECT count(*) FROM core.treatment_initiations i"
                         + " JOIN core.sites site ON site.id = i.site_id" + geoJoin
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?",
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?",
                 Long.class, args.toArray());
 
         List<Object> pagedArgs = new ArrayList<>(args);
@@ -182,7 +182,7 @@ public class InitiationService {
                         + "         ORDER BY pi.id LIMIT 1) AS patient_code"
                         + " FROM core.treatment_initiations i"
                         + " JOIN core.sites site ON site.id = i.site_id" + geoJoin
-                        + " WHERE i.voided = FALSE AND i.arv_init_date >= ? AND i.arv_init_date <= ?"
+                        + " WHERE i.voided = FALSE AND COALESCE(i.arv_init_date, i.enrollment_date) >= ? AND COALESCE(i.arv_init_date, i.enrollment_date) <= ?"
                         + SortSpec.orderBy(sort, dir, INIT_SORTABLE,
                                 "i.arv_init_date DESC NULLS LAST, i.id DESC")
                         + " LIMIT ? OFFSET ?",
