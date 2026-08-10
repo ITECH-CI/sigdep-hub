@@ -76,7 +76,7 @@ public class BiologyController {
         Scope s = authScope.effective(regionId, districtId, siteId);
         PeriodRange period = PeriodRange.resolve(from, to);
         ExamPage page = service.exams(test, period,
-                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
+                s.regionId(), s.districtId(), s.siteId(), null, null, 0, 100_000);
 
         String filename = "biology-" + (test == null ? "all" : test)
                 + "-" + period.from() + "_" + period.to() + ".csv";

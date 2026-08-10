@@ -78,7 +78,7 @@ public class PatientController {
             HttpServletResponse response) throws IOException {
 
         Scope s = authScope.effective(regionId, districtId, siteId);
-        PatientPage page = service.list(q, s.regionId(), s.districtId(), s.siteId(), null, null, 0, 5000);
+        PatientPage page = service.list(q, s.regionId(), s.districtId(), s.siteId(), null, null, 0, 100_000);
 
         String filename = "patients.csv";
         response.setContentType("text/csv;charset=UTF-8");
