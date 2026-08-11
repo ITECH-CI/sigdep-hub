@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      Index sur la COLONNE DE DATE SEULE des deux grosses tables (lab_results,
+      visits), pour les statistiques NATIONALES (sans filtre géographique).
+
+      Contexte : les index existants sont composites et préfixés par site_id
+      (idx_lab_site_date = (site_id, exam_date), idx_visits_site_date =
+      (site_id, visit_date)). Ils servent parfaitement les vues filtrées par
+      site/région. Mais une requête nationale (« toute la Côte d'Ivoire »),
+      qui ne filtre que sur la date, ne peut pas les utiliser (site_id en tête)
+      → PostgreSQL fait un SEQ SCAN de toute la table.
+        Mesuré sur ~1 M lab_results : requête filtrée par site = 21 ms
+        (bitmap index scan) ; requête nationale = 437 ms (parallel seq scan).
+      À ~15 M lignes (250 k patients), ce seq scan passerait à ~6-7 s par KPI.
+
+      Ces index sur (date) seule permettent un index scan pour les vues
+      nationales. PARTIELS sur voided = FALSE : plus petits (les lignes voided
+      sont exclues de toutes les stats) et alignés sur le filtre systématique.
+
+      lab_results n'est pas partitionnée → CREATE INDEX CONCURRENTLY possible
+      (pas de lock en écriture ; requiert runInTransaction=false). visits EST
+      partitionnée par visit_date → CONCURRENTLY non supporté sur la table
+      parent ; on crée l'index sur le parent (PostgreSQL le propage à chaque
+      partition), en runInTransaction=false, avec un lock bref par partition.
+    -->
+
+    <changeSet id="045-idx-lab-exam-date" author="pkomena" runInTransaction="false" failOnError="true">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists indexName="idx_lab_exam_date" schemaName="core"/>
+            </not>
+        </preConditions>
+        <sql>
+            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lab_exam_date
+                ON core.lab_results (exam_date)
+                WHERE voided = FALSE;
+        </sql>
+    </changeSet>
+
+    <changeSet id="045-idx-visits-visit-date" author="pkomena" runInTransaction="false" failOnError="true">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists indexName="idx_visits_visit_date" schemaName="core"/>
+            </not>
+        </preConditions>
+        <!--
+          Table partitionnée : pas de CONCURRENTLY sur le parent. CREATE INDEX
+          sur le parent crée un index par partition. IF NOT EXISTS pour être
+          rejouable. Le WHERE partiel doit inclure la colonne de partition
+          implicitement compatible (visit_date est la clé de partition, OK).
+        -->
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_visits_visit_date
+                ON core.visits (visit_date)
+                WHERE voided = FALSE;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
