@@ -7,6 +7,31 @@ plateforme adhère à [Semantic Versioning](https://semver.org/).
 > fichier au fil de l'eau ; voir les tags Git et l'historique des commits
 > pour le détail. La 2.1.3 reprend le suivi ci-dessous.
 
+## [2.1.12] — 2026-08-11
+
+### Performance
+
+- **Index date-seule sur `lab_results` et `visits`** (migration 045) pour les
+  vues NATIONALES (sans filtre géo). Les index existants sont préfixés par
+  `site_id` — inutilisables quand on ne filtre que par date → seq scan de toute
+  la table (mesuré : 437 ms sur 1 M lignes ; ~6-7 s projeté à 15 M / 250 k
+  patients). Index partiels `(exam_date)`/`(visit_date) WHERE voided=FALSE`.
+
+### Corrigé
+
+- **Rejet des visites à partir de 2031** (migration 046). `core.visits` est
+  partitionnée par `visit_date` mais la plage s'arrêtait à 2030 sans partition
+  DEFAULT : dès le 2031-01-01, toute visite 2031+ aurait été rejetée
+  (`no partition found`). Ajout des partitions 2031→2040 (partition pruning
+  conservé) + une partition DEFAULT (filet : aucune ligne jamais rejetée).
+
+### Modifié
+
+- **Spinner pendant l'export CSV** : les boutons « Exporter CSV » affichent un
+  loader animé pendant l'opération (13 boutons, toutes les pages).
+- **Biologie** : la card « Top examens · période » remonte juste avant le
+  tableau des examens.
+
 ## [2.1.11] — 2026-08-10
 
 ### Corrigé
