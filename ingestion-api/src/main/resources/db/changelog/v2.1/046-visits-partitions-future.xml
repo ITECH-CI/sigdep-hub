@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      core.visits est PARTITION BY RANGE (visit_date). La plage explicite
+      s'arrêtait à 2030 (partition visits_2030 = [2030-01-01, 2031-01-01)) SANS
+      partition DEFAULT. Conséquence : dès le 2031-01-01, toute visite datée
+      2031+ serait REJETÉE à l'insertion —
+        « ERROR: no partition of relation "visits" found for row »
+      → rejets UPSERT_FAILED en masse, ingestion des visites récentes bloquée.
+      C'est exactement l'incident déjà rencontré côté ancien (visites 2001
+      rejetées, corrigé par la migration 043), reproduit à l'horizon 2031.
+
+      Double protection :
+        1) partitions annuelles 2031→2040 (gardent le partition pruning : une
+           requête bornée sur une année ne scanne que la partition concernée) ;
+        2) partition DEFAULT (filet de sécurité : capte TOUTE date hors plage
+           explicite — passé lointain ou futur au-delà de 2040 — pour qu'aucune
+           ligne ne soit jamais rejetée).
+
+      ORDRE OBLIGATOIRE : créer les partitions annuelles AVANT la DEFAULT. On ne
+      peut pas attacher une partition annuelle si une DEFAULT existante contient
+      déjà des lignes de cette plage (« would overlap »). La table étant vide de
+      2031+ aujourd'hui, l'ordre annuelles → DEFAULT est sûr.
+
+      Idempotent (CREATE TABLE IF NOT EXISTS) : no-op si déjà appliqué.
+    -->
+    <changeSet id="046-visits-partitions-2031-2040" author="pkomena" failOnError="true">
+        <sql splitStatements="true">
+            CREATE TABLE IF NOT EXISTS core.visits_2031 PARTITION OF core.visits FOR VALUES FROM ('2031-01-01') TO ('2032-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2032 PARTITION OF core.visits FOR VALUES FROM ('2032-01-01') TO ('2033-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2033 PARTITION OF core.visits FOR VALUES FROM ('2033-01-01') TO ('2034-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2034 PARTITION OF core.visits FOR VALUES FROM ('2034-01-01') TO ('2035-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2035 PARTITION OF core.visits FOR VALUES FROM ('2035-01-01') TO ('2036-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2036 PARTITION OF core.visits FOR VALUES FROM ('2036-01-01') TO ('2037-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2037 PARTITION OF core.visits FOR VALUES FROM ('2037-01-01') TO ('2038-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2038 PARTITION OF core.visits FOR VALUES FROM ('2038-01-01') TO ('2039-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2039 PARTITION OF core.visits FOR VALUES FROM ('2039-01-01') TO ('2040-01-01');
+            CREATE TABLE IF NOT EXISTS core.visits_2040 PARTITION OF core.visits FOR VALUES FROM ('2040-01-01') TO ('2041-01-01');
+        </sql>
+    </changeSet>
+
+    <changeSet id="046-visits-partition-default" author="pkomena" failOnError="true">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'core' AND c.relname = 'visits_default';
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            CREATE TABLE core.visits_default PARTITION OF core.visits DEFAULT;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
