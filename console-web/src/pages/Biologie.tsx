@@ -19,7 +19,7 @@ import {
   fetchBiologyExams,
   fetchBiologySummary,
 } from "../api/client";
-import { Download, Microscope } from "lucide-react";
+import { Download, Loader2, Microscope } from "lucide-react";
 import { CardHeader } from "../components/CardHeader";
 import { GeoFilter, GeoScope } from "../components/GeoFilter";
 import {
@@ -264,6 +264,33 @@ export function Biologie() {
         </div>
       </div>
 
+      {/* Top tests (kept as a small reference before the table) */}
+      {summary.data && summary.data.topTests.length > 0 && (
+        <div className="card p-4 mt-6">
+          <h3 className="text-sm font-medium mb-3">
+            Top examens (toutes catégories) &middot; période
+          </h3>
+          <table className="w-full text-sm">
+            <thead className="text-ink-muted">
+              <tr className="text-left">
+                <th className="py-1 font-medium">Examen</th>
+                <th className="py-1 font-medium text-right">Nombre</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {summary.data.topTests.map((t) => (
+                <tr key={t.testName}>
+                  <td className="py-1">{t.testName}</td>
+                  <td className="py-1 text-right tabular-nums">
+                    {formatInt(t.count)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Exams table with tabs */}
       <div className="card overflow-hidden">
         <div className="px-4 pt-3 flex items-center justify-between gap-2 flex-wrap bg-sigdep-50 border-b border-sigdep-100">
@@ -295,7 +322,7 @@ export function Biologie() {
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs
                          hover:bg-slate-50 disabled:opacity-50 transition"
             >
-              <Download className="h-3.5 w-3.5" />
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               {exporting ? "Export…" : "Exporter CSV"}
             </button>
           </div>
@@ -417,33 +444,6 @@ export function Biologie() {
           </div>
         )}
       </div>
-
-      {/* Top tests (kept as a small reference at the bottom) */}
-      {summary.data && summary.data.topTests.length > 0 && (
-        <div className="card p-4 mt-6">
-          <h3 className="text-sm font-medium mb-3">
-            Top examens (toutes catégories) &middot; période
-          </h3>
-          <table className="w-full text-sm">
-            <thead className="text-ink-muted">
-              <tr className="text-left">
-                <th className="py-1 font-medium">Examen</th>
-                <th className="py-1 font-medium text-right">Nombre</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {summary.data.topTests.map((t) => (
-                <tr key={t.testName}>
-                  <td className="py-1">{t.testName}</td>
-                  <td className="py-1 text-right tabular-nums">
-                    {formatInt(t.count)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
