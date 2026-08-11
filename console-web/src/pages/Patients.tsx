@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Download, Search, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Loader2, Search, Users } from 'lucide-react';
 import { downloadPatientsCsv, fetchPatients } from '../api/client';
 import { formatInt } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
@@ -75,7 +75,7 @@ export function Patients() {
             disabled={exporting || !data || data.total === 0}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs
                        hover:bg-slate-50 disabled:opacity-50 transition">
-            <Download className="h-3.5 w-3.5" />
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {exporting ? 'Export…' : 'Exporter CSV'}
           </button>
         </>} />

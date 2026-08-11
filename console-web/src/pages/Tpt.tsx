@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { BookOpenCheck, Download } from 'lucide-react';
+import { BookOpenCheck, Download, Loader2 } from 'lucide-react';
 import {
   downloadTptCsv, fetchTptRecords, fetchTptSummary,
 } from '../api/client';
@@ -75,7 +75,7 @@ export function Tpt() {
             disabled={exporting || !records.data || records.data.total === 0}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs
                        hover:bg-slate-50 disabled:opacity-50 transition">
-            <Download className="h-3.5 w-3.5" />
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {exporting ? 'Export…' : 'Exporter CSV'}
           </button>
         </>} />

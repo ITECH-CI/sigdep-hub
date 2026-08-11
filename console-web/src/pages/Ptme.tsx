@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { Baby, Download, Users } from 'lucide-react';
+import { Baby, Download, Loader2, Users } from 'lucide-react';
 import {
   downloadPtmeChildCsv, downloadPtmeMotherCsv,
   fetchPtmeChildRecords, fetchPtmeChildSummary,
@@ -121,7 +121,7 @@ function MotherPanel({ period, scope }: { period: PeriodRange; scope: GeoScope }
         disabled={exporting || !records.data || records.data.total === 0}
         className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs
                    hover:bg-slate-50 disabled:opacity-50 transition">
-        <Download className="h-3.5 w-3.5" />
+        {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
         {exporting ? 'Export…' : 'Exporter CSV (mères)'}
       </button>
     </div>
@@ -273,7 +273,7 @@ function ChildPanel({ period, scope }: { period: PeriodRange; scope: GeoScope })
         disabled={exporting || !records.data || records.data.total === 0}
         className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-xs
                    hover:bg-slate-50 disabled:opacity-50 transition">
-        <Download className="h-3.5 w-3.5" />
+        {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
         {exporting ? 'Export…' : 'Exporter CSV (enfants)'}
       </button>
     </div>
