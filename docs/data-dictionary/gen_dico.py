@@ -318,6 +318,34 @@ CONCEPTS = {
  ("treatment_initiations","ptme_history"): ("163450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Antécédent PTME"),
  ("treatment_initiations","ptme_regimen_history"): ("1400AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Régime antécédent PTME"),
  ("treatment_initiations","ptme_history_date"): ("164588AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date PTME"),
+ # treatment_initiations_pediatric
+ ("treatment_initiations_pediatric","birth_weight_kg"): ("1406AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Poids de naissance"),
+ ("treatment_initiations_pediatric","birth_length_cm"): ("1835AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Taille de naissance"),
+ ("treatment_initiations_pediatric","head_circumference_cm"): ("163587AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Périmètre crânien"),
+ ("treatment_initiations_pediatric","apgar_score"): ("1504AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Score d'Apgar"),
+ ("treatment_initiations_pediatric","delivery_mode"): ("163568AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Mode d'accouchement"),
+ ("treatment_initiations_pediatric","delivered_at_facility"): ("164738AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Accouchement en structure"),
+ ("treatment_initiations_pediatric","mother_received_ptme"): ("164475AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Mère a reçu la PTME"),
+ ("treatment_initiations_pediatric","mother_hiv_status"): ("1396AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut VIH de la mère"),
+ ("treatment_initiations_pediatric","mother_vital_status"): ("163646AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut vital de la mère"),
+ ("treatment_initiations_pediatric","mother_ptme_regimen"): ("165213AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Régime PTME de la mère"),
+ ("treatment_initiations_pediatric","infant_arv_prophylaxis_given"): ("163605AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Prophylaxie ARV du nourrisson"),
+ ("treatment_initiations_pediatric","infant_arv_protocol"): ("163638AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Protocole ARV du nourrisson"),
+ ("treatment_initiations_pediatric","feeding_mode"): ("163584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Mode d'alimentation"),
+ ("treatment_initiations_pediatric","weaning_date"): ("163510AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de sevrage"),
+ ("treatment_initiations_pediatric","vaccinations"): ("1197AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Vaccinations"),
+ ("treatment_initiations_pediatric","father_vital_status"): ("163647AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut vital du père"),
+ ("treatment_initiations_pediatric","father_education_level"): ("164457AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Niveau d'éducation du père"),
+ ("treatment_initiations_pediatric","father_activity_type"): ("164462AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Type d'activité du père"),
+ ("treatment_initiations_pediatric","mother_education_level"): ("164458AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Niveau d'éducation de la mère"),
+ ("treatment_initiations_pediatric","mother_activity_type"): ("164461AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Type d'activité de la mère"),
+ ("treatment_initiations_pediatric","guardian_vital_status"): ("164467AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut vital du tuteur"),
+ ("treatment_initiations_pediatric","guardian_education_level"): ("164468AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Niveau d'éducation du tuteur"),
+ ("treatment_initiations_pediatric","guardian_activity_type"): ("164470AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Type d'activité du tuteur"),
+ ("treatment_initiations_pediatric","guardian_hiv_status"): ("164471AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut VIH du tuteur"),
+ ("treatment_initiations_pediatric","admission_date"): ("164488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date d'admission"),
+ ("treatment_initiations_pediatric","schooling_status"): ("164746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut de scolarisation"),
+ ("treatment_initiations_pediatric","screening_code"): ("164072AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Code de dépistage"),
  # visits
  ("visits","weight_kg"): ("5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Poids (kg)"),
  ("visits","height_cm"): ("5090AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Taille (cm)"),
@@ -357,9 +385,21 @@ CONCEPTS = {
  ("closures","death_cause_text"): ("162580AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Cause de décès (texte)"),
  ("closures","death_cause_code"): ("165225AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Cause de décès (codée)"),
 }
-def concept(table, col):
+# Cas particuliers de concept au niveau colonne (concept dynamique / source directe).
+CONCEPT_SPECIAL = {
+ ("lab_results","test_uuid"): ("Concept de l'examen (variable par ligne)", "= la valeur de cette colonne"),
+ ("lab_results","test_name"): ("Libellé du concept de l'examen", "cf. test_uuid"),
+ ("lab_results","value_coded"): ("Réponse codée du concept (libellé)", "concept-réponse OpenMRS"),
+}
+def concept_pair(table, col):
+    """Retourne (libellé, code) pour la colonne, ou ('','')."""
     u = CONCEPTS.get((table,col))
-    return f"{u[1]}\n{u[0]}" if u else ""
+    if u:
+        return (u[1], u[0])
+    s = CONCEPT_SPECIAL.get((table,col))
+    if s:
+        return s
+    return ("", "")
 
 # Contraintes connues (au-delà de la PK id)
 CONSTRAINTS = {
@@ -469,10 +509,29 @@ for title, body in notes:
 wn.column_dimensions["A"].width = 120
 
 # ===== Une feuille par table =====
-HEADERS = ["#","Colonne","Type SQL","Obligatoire","Clé / Contrainte","Description métier","Concept OpenMRS (libellé + UUID)"]
-WIDTHS  = [5, 30, 18, 11, 28, 60, 34]
+HEADERS = ["#","Colonne","Type SQL","Obligatoire","Clé / Contrainte","Description métier","Concept OpenMRS — libellé","Concept OpenMRS — code (UUID)"]
+WIDTHS  = [5, 30, 18, 11, 26, 55, 30, 40]
+NCOLS = len(HEADERS)
 label_by = {t: lbl for t,lbl,_ in TABLES}
 desc_by  = {t: d   for t,_,d   in TABLES}
+
+# Note sur l'origine des données (colonne « Concept OpenMRS » remplie ou non).
+DEFAULT_CONCEPT_NOTE = ("Concept OpenMRS : renseigné pour les champs issus d'une observation (obs) "
+    "à concept fixe. Les champs techniques (id, dates de synchro) ou dérivés n'en ont pas.")
+SOURCE_NOTE = {
+ "regions": "Donnée de RÉFÉRENCE (seed), pas issue d'obs OpenMRS → pas de concept.",
+ "districts": "Donnée de RÉFÉRENCE (seed), pas issue d'obs OpenMRS → pas de concept.",
+ "sites": "Donnée de RÉFÉRENCE (seed), pas issue d'obs OpenMRS → pas de concept.",
+ "identifier_types": "Donnée de RÉFÉRENCE, pas issue d'obs OpenMRS → pas de concept.",
+ "patient_identifiers": "Issu de patient_identifier OpenMRS (pas des obs) → pas de concept par colonne.",
+ "screenings": "Source = table custom OpenMRS 'hiv_screening_*' (colonnes SQL directes), PAS des obs/concepts → pas de mapping concept.",
+ "ptme_mothers": "Source = tables custom du module PTME (colonnes SQL directes), PAS des obs → pas de concept.",
+ "ptme_mother_visits": "Source = tables custom du module PTME (colonnes SQL directes), PAS des obs → pas de concept.",
+ "ptme_children": "Source = tables custom du module PTME (colonnes SQL directes), PAS des obs → pas de concept.",
+ "ptme_child_visits": "Source = tables custom du module PTME (colonnes SQL directes), PAS des obs → pas de concept.",
+ "lab_results": "Extraction DYNAMIQUE : le concept n'est pas fixe par colonne — c'est la valeur de 'test_uuid' qui EST le concept de l'examen (variable ligne par ligne). Le résultat est dans value_numeric / value_text / value_coded.",
+ "dispensations": "Table non alimentée actuellement (dispensation captée via visits).",
+}
 
 for tname, label, tdesc in TABLES:
     cols = rows.get(tname)
@@ -483,16 +542,21 @@ for tname, label, tdesc in TABLES:
     wt.cell(1,1,f"core.{tname} — {label}").font = TITLE_FONT
     wt.cell(2,1,tdesc).font = SUB_FONT
     wt.cell(2,1).alignment = WRAP
-    wt.merge_cells(start_row=2,start_column=1,end_row=2,end_column=7)
-    hr = 4
+    wt.merge_cells(start_row=2,start_column=1,end_row=2,end_column=NCOLS)
+    note = SOURCE_NOTE.get(tname, DEFAULT_CONCEPT_NOTE)
+    wt.cell(3,1,"ⓘ " + note).font = Font(italic=True, size=9, color="8A6D00")
+    wt.cell(3,1).alignment = WRAP
+    wt.merge_cells(start_row=3,start_column=1,end_row=3,end_column=NCOLS)
+    hr = 5
     for i,h in enumerate(HEADERS, start=1):
         c = wt.cell(hr,i,h); c.font = HDR_FONT; c.fill = HDR_FILL; c.border = BORDER; c.alignment = Alignment(vertical="center")
     rr = hr+1
     for x in sorted(cols, key=lambda z:int(z["ordinal_position"])):
         col = x["column_name"]
+        clabel, ccode = concept_pair(tname, col)
         vals = [x["ordinal_position"], col, clean_type(x["type_sql"]),
                 "Oui" if x["is_nullable"]=="NO" else "", constraint(tname,col), describe(tname,col),
-                concept(tname,col)]
+                clabel, ccode]
         for i,v in enumerate(vals, start=1):
             c = wt.cell(rr,i,v); c.border = BORDER; c.alignment = WRAP
             if constraint(tname,col)=="Clé primaire" or "Unique" in constraint(tname,col):
@@ -500,7 +564,7 @@ for tname, label, tdesc in TABLES:
         rr += 1
     for i,w in enumerate(WIDTHS, start=1):
         wt.column_dimensions[get_column_letter(i)].width = w
-    wt.freeze_panes = "A5"
+    wt.freeze_panes = "A6"
 
 wb.save(OUT)
 print("OK:", OUT)
