@@ -286,6 +286,81 @@ def describe(table, col):
     g = generic_desc(table, col)
     return g if g else ""
 
+# Concept OpenMRS source par colonne, extrait des constantes _UUID des extracteurs
+# sync (commentaire FR = libellé du concept). Clé = (table, colonne) → (uuid, libellé).
+# Seulement les mappings DIRECTS et fiables ; colonnes techniques/dérivées → absent.
+CONCEPTS = {
+ # patients (person_attributes + obs)
+ ("patients","marital_status"): ("1054AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","État civil"),
+ ("patients","birth_place"): ("164444AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Lieu de naissance"),
+ ("patients","education_level"): ("1712AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Niveau d'éducation"),
+ ("patients","religion"): ("162894AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Religion"),
+ ("patients","profession"): ("162904AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Profession"),
+ # treatment_initiations
+ ("treatment_initiations","arv_init_date"): ("159599AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de début ARV"),
+ ("treatment_initiations","hiv_test_date"): ("160554AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date diagnostique VIH"),
+ ("treatment_initiations","hiv_type"): ("163623AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Résultat Type VIH"),
+ ("treatment_initiations","entry_point"): ("164523AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Point d'entrée"),
+ ("treatment_initiations","who_stage_initial"): ("164487AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Stade clinique OMS"),
+ ("treatment_initiations","cdc_stage_initial"): ("1209AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Stadification CDC"),
+ ("treatment_initiations","arv_regimen_initial"): ("162240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Régime ARV"),
+ ("treatment_initiations","weight_initial_kg"): ("5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Poids (kg)"),
+ ("treatment_initiations","cd4_initial"): ("5497AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Numération CD4"),
+ ("treatment_initiations","cd4_pct_initial"): ("730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","CD4%"),
+ ("treatment_initiations","karnofsky_score"): ("5283AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Score de Karnofsky"),
+ ("treatment_initiations","referred"): ("1648AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Patient référé"),
+ ("treatment_initiations","referred_origin"): ("164562AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Référé origine"),
+ ("treatment_initiations","treatment_motive"): ("162225AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Motif mise sous TARV"),
+ ("treatment_initiations","partner_hiv_status"): ("1436AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Statut sérologique partenaire"),
+ ("treatment_initiations","tb_history"): ("1389AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Antécédent tuberculose"),
+ ("treatment_initiations","arv_history"): ("164540AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Antécédent ARV"),
+ ("treatment_initiations","transfusion_history"): ("1871AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Antécédent transfusion"),
+ ("treatment_initiations","ptme_history"): ("163450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Antécédent PTME"),
+ ("treatment_initiations","ptme_regimen_history"): ("1400AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Régime antécédent PTME"),
+ ("treatment_initiations","ptme_history_date"): ("164588AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date PTME"),
+ # visits
+ ("visits","weight_kg"): ("5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Poids (kg)"),
+ ("visits","height_cm"): ("5090AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Taille (cm)"),
+ ("visits","bmi"): ("1342AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","IMC"),
+ ("visits","temperature_c"): ("5088AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Température (°C)"),
+ ("visits","pulse"): ("5087AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Pouls"),
+ ("visits","respiratory_rate"): ("5242AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Rythme respiratoire"),
+ ("visits","bp_systolic"): ("5085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Tension artérielle systolique"),
+ ("visits","bp_diastolic"): ("5086AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Tension artérielle diastolique"),
+ ("visits","mid_upper_arm_circumference"): ("163586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Périmètre brachial"),
+ ("visits","who_stage"): ("5356AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Stade clinique OMS (courant)"),
+ ("visits","viral_load"): ("856AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","VIH charge virale"),
+ ("visits","viral_load_date"): ("165015AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date dernière charge virale"),
+ ("visits","cd4_count"): ("159375AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","CD4 (patient reported)"),
+ ("visits","cd4_date"): ("160103AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date du dernier CD4"),
+ ("visits","arv_regimen"): ("162240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Régime ARV"),
+ ("visits","arv_treatment_days"): ("164590AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Nombre de jours de traitement ARV"),
+ ("visits","cotrim_treatment_days"): ("164578AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Nombre de jours de cotrimoxazole"),
+ ("visits","next_visit_date"): ("5096AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de la prochaine visite"),
+ ("visits","is_breastfeeding"): ("164764AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Allaitement en cours"),
+ ("visits","tpt_status"): ("165049AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Traitement TPT (statut)"),
+ ("visits","tpt_regimen"): ("165319AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Protocole TPT"),
+ # tpt_records
+ ("tpt_records","tpt_followup_date"): ("165234AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de visite TPT"),
+ ("tpt_records","tpt_end_date"): ("165202AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de fin du TPT"),
+ ("tpt_records","tpt_order_number"): ("165244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Numéro d'ordre TPT"),
+ ("tpt_records","tpt_status"): ("165049AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Traitement TPT (statut)"),
+ ("tpt_records","tpt_regimen"): ("165319AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Protocole TPT"),
+ ("tpt_records","adherence"): ("165200AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Observance traitement préventif"),
+ ("tpt_records","weight_kg"): ("5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Poids (kg)"),
+ # closures (le closure_type est DÉRIVÉ de plusieurs concepts → on liste le principal indicatif)
+ ("closures","death_date"): ("1543AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de décès"),
+ ("closures","actual_death_date"): ("165233AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de décès réelle"),
+ ("closures","transfer_date"): ("164595AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Date de transfert"),
+ ("closures","transfer_reason"): ("165216AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Motif du transfert"),
+ ("closures","transfer_destination"): ("164665AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Destination du transfert"),
+ ("closures","death_cause_text"): ("162580AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Cause de décès (texte)"),
+ ("closures","death_cause_code"): ("165225AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","Cause de décès (codée)"),
+}
+def concept(table, col):
+    u = CONCEPTS.get((table,col))
+    return f"{u[1]}\n{u[0]}" if u else ""
+
 # Contraintes connues (au-delà de la PK id)
 CONSTRAINTS = {
     ("patients","source_uuid"): "Unique (site_id, source_uuid)",
@@ -394,8 +469,8 @@ for title, body in notes:
 wn.column_dimensions["A"].width = 120
 
 # ===== Une feuille par table =====
-HEADERS = ["#","Colonne","Type SQL","Obligatoire","Clé / Contrainte","Description métier"]
-WIDTHS  = [5, 30, 20, 12, 30, 70]
+HEADERS = ["#","Colonne","Type SQL","Obligatoire","Clé / Contrainte","Description métier","Concept OpenMRS (libellé + UUID)"]
+WIDTHS  = [5, 30, 18, 11, 28, 60, 34]
 label_by = {t: lbl for t,lbl,_ in TABLES}
 desc_by  = {t: d   for t,_,d   in TABLES}
 
@@ -408,7 +483,7 @@ for tname, label, tdesc in TABLES:
     wt.cell(1,1,f"core.{tname} — {label}").font = TITLE_FONT
     wt.cell(2,1,tdesc).font = SUB_FONT
     wt.cell(2,1).alignment = WRAP
-    wt.merge_cells(start_row=2,start_column=1,end_row=2,end_column=6)
+    wt.merge_cells(start_row=2,start_column=1,end_row=2,end_column=7)
     hr = 4
     for i,h in enumerate(HEADERS, start=1):
         c = wt.cell(hr,i,h); c.font = HDR_FONT; c.fill = HDR_FILL; c.border = BORDER; c.alignment = Alignment(vertical="center")
@@ -416,7 +491,8 @@ for tname, label, tdesc in TABLES:
     for x in sorted(cols, key=lambda z:int(z["ordinal_position"])):
         col = x["column_name"]
         vals = [x["ordinal_position"], col, clean_type(x["type_sql"]),
-                "Oui" if x["is_nullable"]=="NO" else "", constraint(tname,col), describe(tname,col)]
+                "Oui" if x["is_nullable"]=="NO" else "", constraint(tname,col), describe(tname,col),
+                concept(tname,col)]
         for i,v in enumerate(vals, start=1):
             c = wt.cell(rr,i,v); c.border = BORDER; c.alignment = WRAP
             if constraint(tname,col)=="Clé primaire" or "Unique" in constraint(tname,col):

@@ -42,6 +42,12 @@ Les descriptions métier sont dans `gen_dico.py` :
 - `TABLES` : ordre + libellé + description de chaque table (feuille Sommaire) ;
 - `DESC` : description par colonne, clé `(table, colonne)` ;
 - `COMMON` : descriptions des colonnes communes (id, site_id, voided…) ;
+- `CONCEPTS` : mapping colonne → concept OpenMRS (UUID + libellé), source du
+  concept en base OpenMRS. Extrait des constantes `_UUID` des extracteurs sync
+  (`sigdep-sync/.../extractor/*Extractor.java`, dont les commentaires donnent le
+  libellé FR). Rempli pour les mappings DIRECTS ; les colonnes techniques
+  (id, dates de synchro) ou dérivées de plusieurs concepts (ex. `closure_type`)
+  restent vides. Colonne « Concept OpenMRS » du dictionnaire ;
 - `CONSTRAINTS` : clés/unicité au-delà de la PK ;
 - la liste `notes` : la feuille « Notes importantes ».
 
