@@ -1,0 +1,353 @@
+table_name;ordinal_position;column_name;type_sql;is_nullable;column_default
+closures;1;id;bigint(64,0);NO;
+closures;2;patient_id;bigint(64,0);NO;
+closures;3;site_id;bigint(64,0);NO;
+closures;4;source_uuid;uuid;NO;
+closures;5;closure_type;character varying(50);YES;
+closures;6;closure_date;date;YES;
+closures;7;transfer_date;date;YES;
+closures;8;transfer_destination;character varying(255);YES;
+closures;9;transfer_reason;character varying(255);YES;
+closures;10;death_date;date;YES;
+closures;11;actual_death_date;date;YES;
+closures;12;death_cause_code;character varying(255);YES;
+closures;13;death_cause_text;character varying(255);YES;
+closures;14;voluntary_stop_date;date;YES;
+closures;15;hiv_negative_date;date;YES;
+closures;16;extra_data;jsonb;YES;
+closures;17;voided;boolean;YES;false
+closures;18;created_at;timestamp without time zone;NO;now()
+closures;19;updated_at;timestamp without time zone;NO;now()
+dispensations;1;id;bigint(64,0);NO;
+dispensations;2;patient_id;bigint(64,0);NO;
+dispensations;3;site_id;bigint(64,0);NO;
+dispensations;4;source_uuid;uuid;NO;
+dispensations;5;dispensation_date;date;NO;
+dispensations;6;arv_regimen;character varying(100);YES;
+dispensations;7;duration_days;integer(32,0);YES;
+dispensations;8;next_dispensation_date;date;YES;
+dispensations;9;stockout_date;date;YES;
+dispensations;10;extra_data;jsonb;YES;
+dispensations;11;voided;boolean;YES;false
+dispensations;12;created_at;timestamp without time zone;NO;now()
+dispensations;13;updated_at;timestamp without time zone;NO;now()
+districts;1;id;bigint(64,0);NO;
+districts;2;code;character varying(50);NO;
+districts;3;region_id;bigint(64,0);NO;
+districts;4;name;character varying(255);NO;
+districts;5;source_uuid;character varying(38);YES;
+districts;6;created_at;timestamp without time zone;NO;now()
+districts;7;updated_at;timestamp without time zone;NO;now()
+identifier_types;1;id;integer(32,0);NO;
+identifier_types;2;code;character varying(50);NO;
+identifier_types;3;name;character varying(255);NO;
+identifier_types;4;description;text;YES;
+identifier_types;5;format_regex;character varying(255);YES;
+identifier_types;6;is_active;boolean;YES;true
+lab_results;1;id;bigint(64,0);NO;
+lab_results;2;patient_id;bigint(64,0);NO;
+lab_results;3;site_id;bigint(64,0);NO;
+lab_results;4;source_uuid;uuid;NO;
+lab_results;5;encounter_source_uuid;uuid;NO;
+lab_results;6;test_uuid;character varying(38);NO;
+lab_results;7;test_name;character varying(255);YES;
+lab_results;8;exam_date;date;YES;
+lab_results;9;value_numeric;numeric(15,4);YES;
+lab_results;10;value_text;character varying(255);YES;
+lab_results;11;value_coded;character varying(255);YES;
+lab_results;12;unit;character varying(100);YES;
+lab_results;13;voided;boolean;YES;false
+lab_results;14;created_at;timestamp without time zone;NO;now()
+lab_results;15;updated_at;timestamp without time zone;NO;now()
+patient_identifiers;1;id;bigint(64,0);NO;
+patient_identifiers;2;patient_id;bigint(64,0);NO;
+patient_identifiers;3;identifier_type_id;integer(32,0);NO;
+patient_identifiers;4;identifier_value;character varying(100);NO;
+patient_identifiers;5;is_preferred;boolean;YES;false
+patient_identifiers;6;site_id;bigint(64,0);NO;
+patient_identifiers;7;source_uuid;uuid;YES;
+patient_identifiers;8;valid_from;date;YES;
+patient_identifiers;9;valid_to;date;YES;
+patient_identifiers;10;voided;boolean;YES;false
+patient_identifiers;11;created_at;timestamp without time zone;NO;now()
+patient_identifiers;12;updated_at;timestamp without time zone;NO;now()
+patients;1;id;bigint(64,0);NO;
+patients;2;site_id;bigint(64,0);NO;
+patients;3;source_uuid;uuid;NO;
+patients;4;sex;character varying(1);YES;
+patients;5;birth_date;date;YES;
+patients;6;birth_date_estimated;boolean;YES;false
+patients;7;birth_place;character varying(255);YES;
+patients;8;profession;character varying(100);YES;
+patients;9;education_level;character varying(100);YES;
+patients;10;marital_status;character varying(100);YES;
+patients;11;religion;character varying(100);YES;
+patients;12;voided;boolean;YES;false
+patients;13;voided_at;timestamp without time zone;YES;
+patients;14;created_at;timestamp without time zone;NO;now()
+patients;15;updated_at;timestamp without time zone;NO;now()
+ptme_child_visits;1;id;bigint(64,0);NO;
+ptme_child_visits;2;site_id;bigint(64,0);NO;
+ptme_child_visits;3;source_uuid;character varying(64);NO;
+ptme_child_visits;4;child_source_uuid;character varying(64);YES;
+ptme_child_visits;5;visit_date;date;YES;
+ptme_child_visits;6;age_in_day;smallint(16,0);YES;
+ptme_child_visits;7;age_in_week;smallint(16,0);YES;
+ptme_child_visits;8;age_in_month;smallint(16,0);YES;
+ptme_child_visits;9;eating_type;character varying(80);YES;
+ptme_child_visits;10;modern_contraceptive_method;boolean;YES;
+ptme_child_visits;11;continuing_ctx;character varying(4);YES;
+ptme_child_visits;12;continuing_inh;character varying(4);YES;
+ptme_child_visits;13;extra_data;jsonb;YES;
+ptme_child_visits;14;voided;boolean;YES;false
+ptme_child_visits;15;created_at;timestamp without time zone;NO;now()
+ptme_child_visits;16;updated_at;timestamp without time zone;NO;now()
+ptme_children;1;id;bigint(64,0);NO;
+ptme_children;2;site_id;bigint(64,0);NO;
+ptme_children;3;source_uuid;character varying(64);NO;
+ptme_children;4;mother_source_uuid;character varying(64);YES;
+ptme_children;5;child_followup_number;character varying(80);YES;
+ptme_children;6;birth_date;date;YES;
+ptme_children;7;gender;character varying(10);YES;
+ptme_children;8;arv_prophylaxis_given;character varying(4);YES;
+ptme_children;9;arv_prophylaxis_given_date;date;YES;
+ptme_children;10;followup_end_date;date;YES;
+ptme_children;11;pcr1_sampling_date;date;YES;
+ptme_children;12;age_in_week_on_pcr1;smallint(16,0);YES;
+ptme_children;13;age_in_month_on_pcr1;smallint(16,0);YES;
+ptme_children;14;pcr1_result;character varying(4);YES;
+ptme_children;15;pcr2_sampling_date;date;YES;
+ptme_children;16;age_in_week_on_pcr2;smallint(16,0);YES;
+ptme_children;17;age_in_month_on_pcr2;smallint(16,0);YES;
+ptme_children;18;pcr2_result;character varying(4);YES;
+ptme_children;19;pcr3_sampling_date;date;YES;
+ptme_children;20;age_in_week_on_pcr3;smallint(16,0);YES;
+ptme_children;21;age_in_month_on_pcr3;smallint(16,0);YES;
+ptme_children;22;pcr3_result;character varying(4);YES;
+ptme_children;23;ctx_initiation_date;date;YES;
+ptme_children;24;age_in_week_on_ctx_initiation;smallint(16,0);YES;
+ptme_children;25;age_in_month_on_ctx_initiation;smallint(16,0);YES;
+ptme_children;26;inh_initiation_date;date;YES;
+ptme_children;27;age_in_week_on_inh_initiation;smallint(16,0);YES;
+ptme_children;28;age_in_month_on_inh_initiation;smallint(16,0);YES;
+ptme_children;29;hiv_serology1_date;date;YES;
+ptme_children;30;age_in_week_on_serology1;smallint(16,0);YES;
+ptme_children;31;age_in_month_on_serology1;smallint(16,0);YES;
+ptme_children;32;hiv_serology1_result;character varying(4);YES;
+ptme_children;33;hiv_serology2_date;date;YES;
+ptme_children;34;age_in_week_on_serology2;smallint(16,0);YES;
+ptme_children;35;age_in_month_on_serology2;smallint(16,0);YES;
+ptme_children;36;hiv_serology2_result;character varying(4);YES;
+ptme_children;37;followup_result;character varying(60);YES;
+ptme_children;38;followup_result_date;date;YES;
+ptme_children;39;reference_location;character varying(255);YES;
+ptme_children;40;extra_data;jsonb;YES;
+ptme_children;41;voided;boolean;YES;false
+ptme_children;42;created_at;timestamp without time zone;NO;now()
+ptme_children;43;updated_at;timestamp without time zone;NO;now()
+ptme_mother_visits;1;id;bigint(64,0);NO;
+ptme_mother_visits;2;site_id;bigint(64,0);NO;
+ptme_mother_visits;3;source_uuid;character varying(64);NO;
+ptme_mother_visits;4;mother_source_uuid;character varying(64);YES;
+ptme_mother_visits;5;visit_date;date;YES;
+ptme_mother_visits;6;gestational_age;smallint(16,0);YES;
+ptme_mother_visits;7;continuing_arv;character varying(4);YES;
+ptme_mother_visits;8;continuing_ctx;character varying(4);YES;
+ptme_mother_visits;9;extra_data;jsonb;YES;
+ptme_mother_visits;10;voided;boolean;YES;false
+ptme_mother_visits;11;created_at;timestamp without time zone;NO;now()
+ptme_mother_visits;12;updated_at;timestamp without time zone;NO;now()
+ptme_mothers;1;id;bigint(64,0);NO;
+ptme_mothers;2;site_id;bigint(64,0);NO;
+ptme_mothers;3;source_uuid;character varying(64);NO;
+ptme_mothers;4;pregnant_number;character varying(80);YES;
+ptme_mothers;5;hiv_care_number;character varying(80);YES;
+ptme_mothers;6;screening_number;character varying(80);YES;
+ptme_mothers;7;age;smallint(16,0);YES;
+ptme_mothers;8;marital_status;character varying(40);YES;
+ptme_mothers;9;spousal_screening;character varying(20);YES;
+ptme_mothers;10;spousal_screening_result;character varying(4);YES;
+ptme_mothers;11;start_date;date;YES;
+ptme_mothers;12;end_date;date;YES;
+ptme_mothers;13;arv_status_at_registering;character varying(80);YES;
+ptme_mothers;14;estimated_delivery_date;date;YES;
+ptme_mothers;15;pregnancy_outcome;character varying(40);YES;
+ptme_mothers;16;spousal_screening_date;date;YES;
+ptme_mothers;17;delivery_type;character varying(20);YES;
+ptme_mothers;18;extra_data;jsonb;YES;
+ptme_mothers;19;voided;boolean;YES;false
+ptme_mothers;20;created_at;timestamp without time zone;NO;now()
+ptme_mothers;21;updated_at;timestamp without time zone;NO;now()
+regions;1;id;bigint(64,0);NO;
+regions;2;code;character varying(50);NO;
+regions;3;name;character varying(255);NO;
+regions;4;source_uuid;character varying(38);YES;
+regions;5;created_at;timestamp without time zone;NO;now()
+regions;6;updated_at;timestamp without time zone;NO;now()
+screenings;1;id;bigint(64,0);NO;
+screenings;2;site_id;bigint(64,0);NO;
+screenings;3;source_uuid;character varying(64);NO;
+screenings;4;screening_code;character varying(40);YES;
+screenings;5;screening_date;date;YES;
+screenings;6;result_announcing_date;date;YES;
+screenings;7;gender;character varying(10);YES;
+screenings;8;age;smallint(16,0);YES;
+screenings;9;profession;character varying(255);YES;
+screenings;10;residence;character varying(255);YES;
+screenings;11;marital_status;character varying(40);YES;
+screenings;12;other_marital_status;character varying(255);YES;
+screenings;13;population_type;character varying(40);YES;
+screenings;14;screening_reason;character varying(60);YES;
+screenings;15;other_screening_reason;character varying(255);YES;
+screenings;16;test1_reaction;character varying(4);YES;
+screenings;17;test2_reaction;character varying(4);YES;
+screenings;18;test3_reaction;character varying(4);YES;
+screenings;19;test1_invalidated;boolean;YES;false
+screenings;20;test2_invalidated;boolean;YES;false
+screenings;21;test3_invalidated;boolean;YES;false
+screenings;22;final_result;character varying(4);YES;
+screenings;23;retesting;boolean;YES;false
+screenings;24;comment;text;YES;
+screenings;25;screening_site_type;character varying(80);YES;
+screenings;26;screening_post;character varying(80);YES;
+screenings;27;extra_data;jsonb;YES;
+screenings;28;voided;boolean;YES;false
+screenings;29;created_at;timestamp without time zone;NO;now()
+screenings;30;updated_at;timestamp without time zone;NO;now()
+sites;1;id;bigint(64,0);NO;
+sites;2;code;character varying(50);NO;
+sites;3;name;character varying(255);NO;
+sites;4;district_id;bigint(64,0);NO;
+sites;5;facility_type;character varying(10);YES;
+sites;6;latitude;double precision;YES;
+sites;7;longitude;double precision;YES;
+sites;8;active;boolean;YES;true
+sites;9;source_uuid;character varying(38);YES;
+sites;10;api_key_hash;character varying(255);YES;
+sites;11;last_sync_at;timestamp without time zone;YES;
+sites;12;created_at;timestamp without time zone;NO;now()
+sites;13;updated_at;timestamp without time zone;NO;now()
+sites;14;runs_sigdep;boolean;YES;
+tpt_records;1;id;bigint(64,0);NO;
+tpt_records;2;patient_id;bigint(64,0);NO;
+tpt_records;3;site_id;bigint(64,0);NO;
+tpt_records;4;source_uuid;uuid;NO;
+tpt_records;5;record_type;character varying(20);NO;
+tpt_records;6;record_date;date;YES;
+tpt_records;7;tpt_followup_date;date;YES;
+tpt_records;8;tpt_end_date;date;YES;
+tpt_records;9;tpt_outcome;character varying(100);YES;
+tpt_records;10;tpt_order_number;character varying(100);YES;
+tpt_records;11;adherence;character varying(100);YES;
+tpt_records;12;weight_kg;numeric(5,2);YES;
+tpt_records;13;next_visit_date;date;YES;
+tpt_records;14;extra_data;jsonb;YES;
+tpt_records;15;voided;boolean;YES;false
+tpt_records;16;created_at;timestamp without time zone;NO;now()
+tpt_records;17;updated_at;timestamp without time zone;NO;now()
+tpt_records;18;tpt_status;character varying(100);YES;
+tpt_records;19;tpt_regimen;character varying(100);YES;
+treatment_initiations;1;id;bigint(64,0);NO;
+treatment_initiations;2;patient_id;bigint(64,0);NO;
+treatment_initiations;3;site_id;bigint(64,0);NO;
+treatment_initiations;4;source_uuid;uuid;NO;
+treatment_initiations;5;enrollment_date;date;YES;
+treatment_initiations;6;arv_init_date;date;YES;
+treatment_initiations;7;hiv_test_date;date;YES;
+treatment_initiations;8;hiv_type;character varying(100);YES;
+treatment_initiations;9;entry_point;character varying(100);YES;
+treatment_initiations;10;extra_data;jsonb;YES;
+treatment_initiations;11;voided;boolean;YES;false
+treatment_initiations;12;created_at;timestamp without time zone;NO;now()
+treatment_initiations;13;updated_at;timestamp without time zone;NO;now()
+treatment_initiations;14;who_stage_initial;character varying(100);YES;
+treatment_initiations;15;cdc_stage_initial;character varying(100);YES;
+treatment_initiations;16;arv_regimen_initial;character varying(100);YES;
+treatment_initiations;17;weight_initial_kg;numeric(5,2);YES;
+treatment_initiations;18;cd4_initial;integer(32,0);YES;
+treatment_initiations;19;cd4_pct_initial;numeric(4,1);YES;
+treatment_initiations;20;karnofsky_score;smallint(16,0);YES;
+treatment_initiations;21;referred;character varying(100);YES;
+treatment_initiations;22;referred_origin;character varying(255);YES;
+treatment_initiations;23;treatment_motive;character varying(255);YES;
+treatment_initiations;24;partner_hiv_status;character varying(100);YES;
+treatment_initiations;25;tb_history;character varying(100);YES;
+treatment_initiations;26;arv_history;character varying(100);YES;
+treatment_initiations;27;transfusion_history;character varying(100);YES;
+treatment_initiations;28;ptme_history;character varying(100);YES;
+treatment_initiations;29;ptme_regimen_history;character varying(100);YES;
+treatment_initiations;30;ptme_history_date;date;YES;
+treatment_initiations_pediatric;1;initiation_id;bigint(64,0);NO;
+treatment_initiations_pediatric;2;birth_weight_kg;numeric(5,2);YES;
+treatment_initiations_pediatric;3;birth_length_cm;numeric(5,2);YES;
+treatment_initiations_pediatric;4;head_circumference_cm;numeric(4,1);YES;
+treatment_initiations_pediatric;5;apgar_score;smallint(16,0);YES;
+treatment_initiations_pediatric;6;delivery_mode;character varying(100);YES;
+treatment_initiations_pediatric;7;delivered_at_facility;character varying(100);YES;
+treatment_initiations_pediatric;8;mother_received_ptme;character varying(100);YES;
+treatment_initiations_pediatric;9;mother_hiv_status;character varying(100);YES;
+treatment_initiations_pediatric;10;mother_vital_status;character varying(100);YES;
+treatment_initiations_pediatric;11;mother_ptme_regimen;character varying(100);YES;
+treatment_initiations_pediatric;12;infant_arv_prophylaxis_given;character varying(100);YES;
+treatment_initiations_pediatric;13;infant_arv_protocol;character varying(100);YES;
+treatment_initiations_pediatric;14;feeding_mode;character varying(100);YES;
+treatment_initiations_pediatric;15;weaning_date;date;YES;
+treatment_initiations_pediatric;16;vaccinations;character varying(255);YES;
+treatment_initiations_pediatric;17;father_vital_status;character varying(100);YES;
+treatment_initiations_pediatric;18;father_education_level;character varying(100);YES;
+treatment_initiations_pediatric;19;father_activity_type;character varying(100);YES;
+treatment_initiations_pediatric;20;mother_education_level;character varying(100);YES;
+treatment_initiations_pediatric;21;mother_activity_type;character varying(100);YES;
+treatment_initiations_pediatric;22;guardian_vital_status;character varying(100);YES;
+treatment_initiations_pediatric;23;guardian_education_level;character varying(100);YES;
+treatment_initiations_pediatric;24;guardian_activity_type;character varying(100);YES;
+treatment_initiations_pediatric;25;guardian_hiv_status;character varying(100);YES;
+treatment_initiations_pediatric;26;admission_date;date;YES;
+treatment_initiations_pediatric;27;schooling_status;character varying(100);YES;
+treatment_initiations_pediatric;28;screening_code;character varying(100);YES;
+treatment_initiations_pediatric;29;created_at;timestamp without time zone;NO;now()
+treatment_initiations_pediatric;30;updated_at;timestamp without time zone;NO;now()
+visits;1;id;bigint(64,0);NO;
+visits;2;patient_id;bigint(64,0);NO;
+visits;3;site_id;bigint(64,0);NO;
+visits;4;source_uuid;uuid;NO;
+visits;5;source_form;character varying(50);YES;
+visits;6;visit_date;date;NO;
+visits;7;next_visit_date;date;YES;
+visits;8;tb_screening_result;character varying(50);YES;
+visits;9;tb_diagnosed;boolean;YES;
+visits;10;tb_treatment_status;character varying(50);YES;
+visits;11;tb_treatment_start_date;date;YES;
+visits;12;who_stage;smallint(16,0);YES;
+visits;13;cdc_stage;character varying(10);YES;
+visits;14;ctx_prescribed;boolean;YES;
+visits;15;ctx_start_date;date;YES;
+visits;16;ivsa_success_confirmation_date;date;YES;
+visits;17;is_pregnant;boolean;YES;
+visits;18;is_breastfeeding;boolean;YES;
+visits;19;weight_kg;numeric(10,2);YES;
+visits;20;height_cm;numeric(10,2);YES;
+visits;21;extra_data;jsonb;YES;
+visits;22;voided;boolean;YES;false
+visits;23;created_at;timestamp without time zone;NO;now()
+visits;24;updated_at;timestamp without time zone;NO;now()
+visits;25;arv_regimen;character varying(100);YES;
+visits;26;temperature_c;numeric(10,1);YES;
+visits;27;pulse;smallint(16,0);YES;
+visits;28;respiratory_rate;smallint(16,0);YES;
+visits;29;bp_systolic;smallint(16,0);YES;
+visits;30;bp_diastolic;smallint(16,0);YES;
+visits;31;bmi;numeric(10,1);YES;
+visits;32;mid_upper_arm_circumference;numeric(10,1);YES;
+visits;33;viral_load;numeric(15,2);YES;
+visits;34;viral_load_date;date;YES;
+visits;35;cd4_count;integer(32,0);YES;
+visits;36;cd4_date;date;YES;
+visits;37;arv_treatment_days;smallint(16,0);YES;
+visits;38;cotrim_treatment_days;smallint(16,0);YES;
+visits;39;breastfeeding_status;character varying(100);YES;
+visits;40;tpt_status;character varying(100);YES;
+visits;41;tpt_regimen;character varying(100);YES;
+visits;42;ivsa_msd_code;character varying(40);YES;
+visits;43;ivsa_alert_signs_count;smallint(16,0);YES;
+visits;44;ivsa_neuro_signs_count;smallint(16,0);YES;
