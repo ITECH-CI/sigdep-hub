@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+      Ajout au référentiel core.sites des SERVICES de CHU et de quelques sites
+      absents du seed initial (013-seed-sites.xml), issus de l'export OpenMRS
+      « Location de SIGDEP.xlsx ». Ces établissements/services font tourner leur
+      propre instance SIGDEP-3 mais n'étaient pas répertoriés côté hub, ce qui
+      empêchait la configuration de leur agent (rejet « Unknown site »).
+
+      Deux natures (la hiérarchie parent/enfant formelle — parent_site_id,
+      site_kind — viendra dans une migration ultérieure) :
+        - SERVICES rattachés à un CHU (Cocody, Treichville, Yopougon) : code à
+          suffixe « /NN/ » ;
+        - SITES rattachés directement à un district (AIBEF Yopougon, CHR Adzopé,
+          Dermato-Lèpre Bondoukou).
+
+      Rattachement au district : par JOINTURE sur le district du CHU parent (via
+      son code) ou sur le code du district, pas par district_id en dur — les id
+      pouvant différer d'une base à l'autre. Idempotent : ON CONFLICT (code) DO
+      NOTHING, donc no-op sur une base où un service a déjà été ajouté à la main
+      (ex. 07018/04/ inséré manuellement en test).
+    -->
+
+    <changeSet id="047-seed-chu-services" author="pkomena" failOnError="true">
+        <sql splitStatements="true">
+            <!-- Services des CHU : district = celui du CHU parent (jointure sur son code). -->
+            INSERT INTO core.sites (code, name, district_id, facility_type, active, runs_sigdep, source_uuid)
+            SELECT v.code, v.name, chu.district_id, 'PB', TRUE, TRUE, v.uuid
+            FROM (VALUES
+                ('07018/04/', 'Service de Neurologie CHU Cocody',              '07018', '9d1b819e-b74b-11eb-afef-c8f75041a8b5'),
+                ('00096/20/', 'Service Consultation Externe CHU Cocody',       '07018', '9ceccb5b-b74b-11eb-afef-c8f75041a8b5'),
+                ('00096/03/', 'Service de Gyneco-obstetrique CHU Cocody',      '07018', '9cfac307-b74b-11eb-afef-c8f75041a8b5'),
+                ('00096/01/', 'Service de Pneumo-Physiologie (PPH) CHU Cocody','07018', '9cffc4f2-b74b-11eb-afef-c8f75041a8b5'),
+                ('00096/07/', 'Service de Rhumatologie CHU Cocody',            '07018', '9d04ba50-b74b-11eb-afef-c8f75041a8b5'),
+                ('00096/05/', 'Service de Gastro-enterologie CHU Cocody',      '07018', '9d09ad99-b74b-11eb-afef-c8f75041a8b5'),
+                ('00096/02/', 'Service de Pediatrie CHU Cocody',              '07018', '9d16885a-b74b-11eb-afef-c8f75041a8b5'),
+                ('00132/05/', 'Service de Dermato CHU Treichville',            '00130', '9d20aa00-b74b-11eb-afef-c8f75041a8b5'),
+                ('00149/01/', 'Service de Pédiatrie CHU de YOPOUGON',          '00149', '9d25bb11-b74b-11eb-afef-c8f75041a8b5'),
+                ('00149/02/', 'Service de gynécologie CHU de YOPOUGON',        '00149', '9d2acc22-b74b-11eb-afef-c8f75041a8b5'),
+                ('00149/03/', 'Service de Medecine-Interne CHU YOPOUGON',      '00149', '9d2fdd33-b74b-11eb-afef-c8f75041a8b5')
+            ) AS v(code, name, chu_code, uuid)
+            JOIN core.sites chu ON chu.code = v.chu_code
+            ON CONFLICT (code) DO NOTHING;
+
+            <!-- Sites rattachés directement à un district (jointure sur le code du district). -->
+            INSERT INTO core.sites (code, name, district_id, facility_type, active, runs_sigdep, source_uuid)
+            SELECT v.code, v.name, d.id, v.facility_type, TRUE, TRUE, v.uuid
+            FROM (VALUES
+                ('07707/yf/', 'CSUS-CDV PRIVE AIBEF de YOPOUGON',        '105',  'PV', 'SITE-AIBEF-YOPOUGON-07707AAAAAAAA'),
+                ('03512/01',  'CHR PUBLIC de ADZOPE',                    '2401', 'PB', 'SITE-CHR-ADZOPE-03512AAAAAAAAAAA'),
+                ('03294/01/', 'SERVICE DE SANTE DERMATO-LEPRE BONDOUKOU','1401', 'PB', 'SITE-DERMATO-LEPRE-BONDOUKOU03294')
+            ) AS v(code, name, district_code, facility_type, uuid)
+            JOIN core.districts d ON d.code = v.district_code
+            ON CONFLICT (code) DO NOTHING;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

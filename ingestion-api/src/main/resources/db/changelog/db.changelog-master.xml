@@ -68,4 +68,7 @@
     <!-- v2.1 — partitions visits 2031→2040 + DEFAULT (évite le rejet en 2031) -->
     <include file="db/changelog/v2.1/046-visits-partitions-future.xml"/>
 
+    <!-- v2.1 — services de CHU + sites manquants (référentiel) -->
+    <include file="db/changelog/v2.1/047-seed-chu-services.xml"/>
+
 </databaseChangeLog>
