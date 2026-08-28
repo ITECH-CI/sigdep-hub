@@ -20,6 +20,7 @@ import ci.itechciv.sigdep.hub.domain.entity.Site;
 import ci.itechciv.sigdep.hub.domain.repository.SiteRepository;
 import ci.itechciv.sigdep.hub.domain.service.SiteResolver;
 import ci.itechciv.sigdep.hub.ingestion.log.SyncBatchLogger;
+import ci.itechciv.sigdep.hub.ingestion.security.SiteGuard;
 import ci.itechciv.sigdep.hub.ingestion.writer.ClosureWriter;
 import ci.itechciv.sigdep.hub.ingestion.writer.InitiationWriter;
 import ci.itechciv.sigdep.hub.ingestion.writer.LabResultWriter;
@@ -36,6 +37,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,6 +51,7 @@ public class SyncController {
     private static final Logger log = LoggerFactory.getLogger(SyncController.class);
 
     private final SiteResolver siteResolver;
+    private final SiteGuard siteGuard;
     private final SiteRepository sites;
     private final PatientWriter patientWriter;
     private final VisitWriter visitWriter;
@@ -64,6 +67,7 @@ public class SyncController {
     private final SyncBatchLogger auditLog;
 
     public SyncController(SiteResolver siteResolver,
+                          SiteGuard siteGuard,
                           SiteRepository sites,
                           PatientWriter patientWriter,
                           VisitWriter visitWriter,
@@ -78,6 +82,7 @@ public class SyncController {
                           PtmeChildVisitWriter ptmeChildVisitWriter,
                           SyncBatchLogger auditLog) {
         this.siteResolver = siteResolver;
+        this.siteGuard = siteGuard;
         this.sites = sites;
         this.patientWriter = patientWriter;
         this.visitWriter = visitWriter;
@@ -94,8 +99,9 @@ public class SyncController {
     }
 
     @PostMapping("/patients")
-    public ResponseEntity<SyncBatchResponse> ingestPatients(@RequestBody SyncBatchRequest<PatientDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestPatients(
+            @RequestBody SyncBatchRequest<PatientDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "patients", auth);
         log.info("Ingesting {} patients for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -114,8 +120,9 @@ public class SyncController {
     }
 
     @PostMapping("/visits")
-    public ResponseEntity<SyncBatchResponse> ingestVisits(@RequestBody SyncBatchRequest<VisitDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestVisits(
+            @RequestBody SyncBatchRequest<VisitDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "visits", auth);
         log.info("Ingesting {} visits for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -135,8 +142,8 @@ public class SyncController {
 
     @PostMapping("/treatment_initiations")
     public ResponseEntity<SyncBatchResponse> ingestInitiations(
-            @RequestBody SyncBatchRequest<TreatmentInitiationDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+            @RequestBody SyncBatchRequest<TreatmentInitiationDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "treatment_initiations", auth);
         log.info("Ingesting {} treatment initiations for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -156,8 +163,9 @@ public class SyncController {
     }
 
     @PostMapping("/closures")
-    public ResponseEntity<SyncBatchResponse> ingestClosures(@RequestBody SyncBatchRequest<ClosureDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestClosures(
+            @RequestBody SyncBatchRequest<ClosureDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "closures", auth);
         log.info("Ingesting {} closures for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -176,8 +184,9 @@ public class SyncController {
     }
 
     @PostMapping("/lab_results")
-    public ResponseEntity<SyncBatchResponse> ingestLabResults(@RequestBody SyncBatchRequest<LabResultDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestLabResults(
+            @RequestBody SyncBatchRequest<LabResultDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "lab_results", auth);
         log.info("Ingesting {} lab results for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -196,8 +205,9 @@ public class SyncController {
     }
 
     @PostMapping("/tpt_records")
-    public ResponseEntity<SyncBatchResponse> ingestTptRecords(@RequestBody SyncBatchRequest<TptRecordDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestTptRecords(
+            @RequestBody SyncBatchRequest<TptRecordDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "tpt_records", auth);
         log.info("Ingesting {} TPT records for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -216,8 +226,9 @@ public class SyncController {
     }
 
     @PostMapping("/screenings")
-    public ResponseEntity<SyncBatchResponse> ingestScreenings(@RequestBody SyncBatchRequest<ScreeningDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestScreenings(
+            @RequestBody SyncBatchRequest<ScreeningDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "screenings", auth);
         log.info("Ingesting {} screenings for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -236,8 +247,9 @@ public class SyncController {
     }
 
     @PostMapping("/ptme_mothers")
-    public ResponseEntity<SyncBatchResponse> ingestPtmeMothers(@RequestBody SyncBatchRequest<PtmeMotherDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestPtmeMothers(
+            @RequestBody SyncBatchRequest<PtmeMotherDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "ptme_mothers", auth);
         log.info("Ingesting {} PTME mothers for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -256,8 +268,9 @@ public class SyncController {
     }
 
     @PostMapping("/ptme_mother_visits")
-    public ResponseEntity<SyncBatchResponse> ingestPtmeMotherVisits(@RequestBody SyncBatchRequest<PtmeMotherVisitDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestPtmeMotherVisits(
+            @RequestBody SyncBatchRequest<PtmeMotherVisitDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "ptme_mother_visits", auth);
         log.info("Ingesting {} PTME mother visits for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -276,8 +289,9 @@ public class SyncController {
     }
 
     @PostMapping("/ptme_children")
-    public ResponseEntity<SyncBatchResponse> ingestPtmeChildren(@RequestBody SyncBatchRequest<PtmeChildDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestPtmeChildren(
+            @RequestBody SyncBatchRequest<PtmeChildDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "ptme_children", auth);
         log.info("Ingesting {} PTME children for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
@@ -296,8 +310,9 @@ public class SyncController {
     }
 
     @PostMapping("/ptme_child_visits")
-    public ResponseEntity<SyncBatchResponse> ingestPtmeChildVisits(@RequestBody SyncBatchRequest<PtmeChildVisitDto> batch) {
-        Site site = siteResolver.resolve(batch.siteCode(), null);
+    public ResponseEntity<SyncBatchResponse> ingestPtmeChildVisits(
+            @RequestBody SyncBatchRequest<PtmeChildVisitDto> batch, Authentication auth) {
+        Site site = siteGuard.resolveAndGuard(batch, "ptme_child_visits", auth);
         log.info("Ingesting {} PTME child visits for site {} (batch {})",
                 batch.records().size(), site.getCode(), batch.batchId());
         Instant t0 = Instant.now();
