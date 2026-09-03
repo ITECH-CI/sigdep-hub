@@ -116,9 +116,9 @@ export function Pepfar() {
     <div className="px-6 py-6">
       <PageHeader
         icon={BarChart3}
-        title="Indicateurs PEPFAR"
+        title="Indicateurs MOU"
         subtitle={<>
-          TX_NEW · TX_CURR · TX_PVLS · Trimestre Fiscal PEPFAR
+          TX_NEW · TX_CURR · TX_PVLS · Trimestre fiscal
           {report.data && <> · au {formatDateFr(report.data.period.end)}</>}
         </>}
         right={<>

@@ -4,23 +4,16 @@ import {
   Bar, BarChart, LabelList, ResponsiveContainer, XAxis, YAxis, Tooltip,
 } from 'recharts';
 import {
-  Activity, AlertTriangle, Building2, Clock, Hospital, LayoutDashboard, Map,
-  TrendingUp, UserPlus, Users, type LucideIcon,
+  Building2, LayoutDashboard, Map,
+  TrendingUp, UserPlus, Users,
 } from 'lucide-react';
 import { fetchDashboardKpis, fetchFileActiveByRegion } from '../api/client';
 import { GeoFilter, GeoScope } from '../components/GeoFilter';
 import { Kpi, formatInt, formatPercent } from '../components/Kpi';
 import { PageHeader } from '../components/PageHeader';
 import {
-  ChartSkeleton, KpiRowSkeleton, ListSkeleton,
+  ChartSkeleton, KpiRowSkeleton,
 } from '../components/Skeleton';
-import { StatusBadge, type BadgeTone } from '../components/StatusBadge';
-
-function formatTime(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-}
 
 export function Dashboard() {
   const [scope, setScope] = useState<GeoScope>({});
@@ -60,7 +53,7 @@ export function Dashboard() {
           <Kpi label="File active"
                icon={Users}
                value={isError ? 'Erreur' : formatInt(data?.fileActive)}
-               hint="12 mois glissants"
+               hint="12 derniers mois"
                hintTone="neutral" />
           <Kpi label="TX_NEW (mois)"
                icon={UserPlus}
@@ -81,8 +74,10 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Two-column row */}
-      <div className="grid gap-3 lg:grid-cols-2">
+      {/* File active — pleine largeur (les alertes de synchronisation ont été
+          retirées de la vue d'ensemble à la demande du GTT ; elles restent
+          disponibles sur la page Synchronisation). */}
+      <div className="grid gap-3">
         <section className="card p-5">
           <header className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
@@ -90,7 +85,7 @@ export function Dashboard() {
                                flex items-center justify-center">
                 <Users className="h-4 w-4" />
               </span>
-              File active &middot; 12 mois glissants
+              File active &middot; 12 derniers mois
             </h3>
           </header>
           <div className="h-56">
@@ -115,48 +110,6 @@ export function Dashboard() {
             )}
           </div>
         </section>
-
-        <section className="card p-5">
-          <header className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
-              <span className="h-7 w-7 rounded-md bg-amber-50 text-amber-700
-                               flex items-center justify-center">
-                <AlertTriangle className="h-4 w-4" />
-              </span>
-              Alertes synchronisation
-            </h3>
-          </header>
-          {isLoading ? (
-            <ListSkeleton rows={4} />
-          ) : data ? (
-            <ul className="divide-y divide-slate-100">
-              <AlertRow
-                icon={AlertTriangle}
-                iconTone="danger"
-                label={`${formatInt(data.syncAlerts.sitesNoSync7d)} sites > 7j sans sync`}
-                badge="Critique"
-                tone="danger" />
-              <AlertRow
-                icon={Clock}
-                iconTone="warning"
-                label={`${formatInt(data.syncAlerts.sitesNoSync24h)} sites > 24h sans sync`}
-                badge="Attention"
-                tone="warning" />
-              <AlertRow
-                icon={Hospital}
-                iconTone="info"
-                label={`${formatInt(data.fileActive)} lignes en file`}
-                badge="Globale"
-                tone="info" />
-              <AlertRow
-                icon={Activity}
-                iconTone="ok"
-                label="Dernier batch reçu"
-                badge={formatTime(data.syncAlerts.lastBatchAt)}
-                tone="ok" />
-            </ul>
-          ) : null}
-        </section>
       </div>
 
       {/* Répartition géographique de la file active. Bar chart horizontal
@@ -170,7 +123,7 @@ export function Dashboard() {
                                flex items-center justify-center">
                 <Map className="h-4 w-4" />
               </span>
-              File active par région &middot; 12 mois glissants
+              File active par région &middot; 12 derniers mois
             </h3>
             <span className="text-xs text-ink-muted">
               {regions.data.length} régions
@@ -204,30 +157,3 @@ export function Dashboard() {
   );
 }
 
-const ICON_TINT: Record<BadgeTone, string> = {
-  ok:      'bg-emerald-50 text-emerald-600',
-  warning: 'bg-amber-50   text-amber-600',
-  danger:  'bg-rose-50    text-rose-600',
-  info:    'bg-sigdep-50  text-sigdep-600',
-  neutral: 'bg-slate-100  text-slate-500',
-};
-
-function AlertRow({ icon: Icon, iconTone, label, badge, tone }: Readonly<{
-  icon: LucideIcon;
-  iconTone: BadgeTone;
-  label: string;
-  badge: string;
-  tone: BadgeTone;
-}>) {
-  return (
-    <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className={`h-6 w-6 rounded-md flex items-center justify-center shrink-0 ${ICON_TINT[iconTone]}`}>
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <span className="text-ink truncate">{label}</span>
-      </div>
-      <StatusBadge tone={tone}>{badge}</StatusBadge>
-    </li>
-  );
-}
