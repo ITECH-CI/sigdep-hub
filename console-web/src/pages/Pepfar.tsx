@@ -157,31 +157,31 @@ export function Pepfar() {
       {report.isLoading ? <KpiRowSkeleton /> : (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
           <Kpi
-            label="TX_NEW"
+            label="Nouvelles initiations ARV"
             value={report.isError ? "Erreur" : formatInt(report.data?.txNew.total)}
-            hint="Nouvelles initiations ARV"
+            hint="TX_NEW · initiations du trimestre"
             hintTone="neutral"
           />
           <Kpi
-            label="TX_CURR"
+            label="Patients sous traitement"
             value={report.isError ? "Erreur" : formatInt(report.data?.txCurr.total)}
-            hint="Sous traitement (fin du trimestre)"
+            hint="TX_CURR · fin du trimestre"
             hintTone="neutral"
           />
           <Kpi
-            label="TX_PVLS (D)"
+            label="Charge virale documentée"
             value={report.isError
                 ? "Erreur"
                 : formatInt(report.data?.txPvls.denominator.total)}
-            hint="Éligibles à un test CV (12 mois)"
+            hint="TX_PVLS (D) · éligibles CV, 12 mois"
             hintTone="neutral"
           />
           <Kpi
-            label="TX_PVLS (%)"
+            label="Taux de suppression virale"
             value={report.isError
                 ? "Erreur"
                 : formatPercent(report.data?.txPvls.pct ?? null)}
-            hint="CV < 1000 copies/mL"
+            hint="TX_PVLS (%) · CV < 1000 copies/mL"
             hintTone="positive"
           />
         </div>
@@ -191,27 +191,27 @@ export function Pepfar() {
       {!report.isLoading && report.data && (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
           <Kpi
-            label="HTS_TST"
+            label="Clients dépistés"
             value={formatInt(report.data.hts.tst.total)}
-            hint="Personnes dépistées"
+            hint="HTS_TST · ayant reçu le résultat"
             hintTone="neutral"
           />
           <Kpi
-            label="HTS_POS"
+            label="Dépistés positifs"
             value={formatInt(report.data.hts.pos.total)}
-            hint={`Positivité : ${formatPercent(report.data.hts.positivityPct ?? null)}`}
+            hint={`HTS_POS · positivité : ${formatPercent(report.data.hts.positivityPct ?? null)}`}
             hintTone="warning"
           />
           <Kpi
-            label="PMTCT_ART (%)"
+            label="Femmes enceintes VIH+ sous ARV"
             value={formatPercent(report.data.pmtct.art.pct ?? null)}
-            hint={`${formatInt(report.data.pmtct.art.numerator.total)} sous ARV / ${formatInt(report.data.pmtct.art.denominator.total)} VIH+`}
+            hint={`PMTCT_ART · ${formatInt(report.data.pmtct.art.numerator.total)} sous ARV / ${formatInt(report.data.pmtct.art.denominator.total)} VIH+`}
             hintTone="positive"
           />
           <Kpi
-            label="TB_PREV (%)"
+            label="TPT terminé"
             value={formatPercent(report.data.tbPrev.pct ?? null)}
-            hint={`${formatInt(report.data.tbPrev.numerator.total)} terminés / ${formatInt(report.data.tbPrev.denominator.total)}`}
+            hint={`TB_PREV · ${formatInt(report.data.tbPrev.numerator.total)} terminés / ${formatInt(report.data.tbPrev.denominator.total)}`}
             hintTone="positive"
           />
         </div>
@@ -232,32 +232,32 @@ export function Pepfar() {
       {report.data && (
         <div className="space-y-6">
           <DisaggTable
-            title="TX_NEW — Nouvelles initiations ARV"
+            title="Nouvelles initiations ARV (TX_NEW)"
             data={report.data.txNew}
           />
           <DisaggTable
-            title="TX_CURR — Sous traitement à la fin du trimestre"
+            title="Patients sous traitement à la fin du trimestre (TX_CURR)"
             data={report.data.txCurr}
           />
           <PvlsTable pvls={report.data.txPvls} />
           <HtsTable hts={report.data.hts} />
           <PairTable
-            title="PMTCT_STAT — Statut VIH connu chez la femme enceinte"
+            title="Statut VIH connu chez la femme enceinte (PMTCT_STAT)"
             ratioLabel="connu"
             pair={report.data.pmtct.stat}
           />
           <PairTable
-            title="PMTCT_ART — Femmes enceintes VIH+ sous ARV"
+            title="Femmes enceintes VIH+ sous ARV (PMTCT_ART)"
             ratioLabel="sous ARV"
             pair={report.data.pmtct.art}
           />
           <PairTable
-            title="PMTCT_EID — Enfants exposés avec PCR1 ≤ 2 mois"
+            title="Enfants exposés avec PCR1 ≤ 2 mois (PMTCT_EID)"
             ratioLabel="PCR1 précoce"
             pair={report.data.pmtct.eid}
           />
           <PairTable
-            title="TB_PREV — TPT terminé pendant le trimestre"
+            title="TPT terminé pendant le trimestre (TB_PREV)"
             ratioLabel="terminés"
             pair={report.data.tbPrev}
           />
@@ -443,7 +443,7 @@ function RatioTable({
 function PvlsTable({ pvls }: { pvls: TxPvls }) {
   return (
     <RatioTable
-      title="TX_PVLS — Suppression virale · numérateur / dénominateur (%)"
+      title="Suppression virale · numérateur / dénominateur (%) (TX_PVLS)"
       denom={buildMatrix(pvls.denominator)}
       numer={buildMatrix(pvls.numerator)}
       denomTotal={pvls.denominator.total}
@@ -487,7 +487,7 @@ function PairTable({
 function HtsTable({ hts }: { hts: Hts }) {
   return (
     <RatioTable
-      title="HTS_TST / HTS_POS — Dépistage VIH · positifs / dépistés (%)"
+      title="Dépistage VIH · positifs / dépistés (%) (HTS_TST / HTS_POS)"
       denom={buildMatrix(hts.tst)}
       numer={buildMatrix(hts.pos)}
       denomTotal={hts.tst.total}

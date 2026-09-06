@@ -55,10 +55,10 @@ export function Dashboard() {
                value={isError ? 'Erreur' : formatInt(data?.fileActive)}
                hint="12 derniers mois"
                hintTone="neutral" />
-          <Kpi label="TX_NEW (mois)"
+          <Kpi label="Nouvelles initiations ARV"
                icon={UserPlus}
                value={isError ? 'Erreur' : formatInt(data?.txNewMonth)}
-               hint="Nouvelles initiations ARV"
+               hint="TX_NEW · mois en cours"
                hintTone="neutral" />
           <Kpi label="CV supprimée"
                icon={TrendingUp}
