@@ -34,7 +34,7 @@ const NAV: NavGroup[] = [
   {
     items: [
       { to: "/app/vue-ensemble", label: "Vue d’ensemble",     icon: LayoutDashboard },
-      { to: "/app/pepfar",       label: "Indicateurs PEPFAR", icon: BarChart3 },
+      { to: "/app/pepfar",       label: "Indicateurs MOU", icon: BarChart3 },
     ],
   },
   {
@@ -60,7 +60,7 @@ const NAV: NavGroup[] = [
     ? [{
         label: "Analyses",
         items: [
-          { to: SUPERSET_URL, label: "Analyses avancées", icon: LineChart, external: true,
+          { to: SUPERSET_URL, label: "Analyse de données avancée", icon: LineChart, external: true,
             requireRoles: ["SUPER_ADMIN", "IT_ADMIN", "NATIONAL_VIEWER", "ANALYST", "AUDITOR"] },
         ],
       } as NavGroup]
@@ -131,12 +131,15 @@ export function AppLayout() {
       >
         <div className={`h-14 border-b border-slate-200 flex items-center gap-2
                          ${collapsed ? "justify-center px-2" : "px-4"}`}>
-          <img src="/logos/sigdep3_crop.png" alt="" className="h-8 w-8" />
-          {!collapsed && (
+          {collapsed ? (
+            <img src="/logos/sigdep3_crop.png"
+                 alt="Base de données centrale SIGDEP" className="h-8 w-8" />
+          ) : (
             <img
-              src="/logos/sigdep_logo_text_small.png"
-              alt="SIGDEP-3"
-              className="h-7 w-auto"
+              src="/logos/sigdep_logo_white_large.png"
+              alt="Base de données centrale SIGDEP"
+              title="Base de données centrale SIGDEP"
+              className="h-9 w-auto"
             />
           )}
         </div>
